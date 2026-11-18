@@ -1,0 +1,74 @@
+x-app-env: &app-env
+  APP_ENV: dev
+  JWT_SECRET: ${JWT_SECRET:-change-me-dev-only}
+  DATABASE_URL: postgresql+asyncpg://aiw:aiw@postgres:5432/aiw
+  ERP_BASE_URL: http://erp-mock:8100
+  APPROVAL_BACKEND: temporal
+  TEMPORAL_HOST: temporal:7233
+  LLM_PROVIDER: ${LLM_PROVIDER:-fake}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  LLM_MODEL: ${LLM_MODEL:-claude-opus-5-5}
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: aiw
+      POSTGRES_PASSWORD: aiw
+      POSTGRES_DB: aiw
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aiw"]
+      interval: 5s
+      retries: 10
+
+  temporal:
+    image: temporalio/auto-setup:1.25.2
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: aiw
+      POSTGRES_PWD: aiw
+      POSTGRES_SEEDS: postgres
+    ports: ["7233:7233"]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  temporal-ui:
+    image: temporalio/ui:2.31.2
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+    ports: ["8233:8080"]
+    depends_on: [temporal]
+
+  erp-mock:
+    build: .
+    command: ["uvicorn", "aiw.mocks.erp_pos.app:app", "--host", "0.0.0.0", "--port", "8100"]
+    environment:
+      CHAOS_ERROR_RATE: ${CHAOS_ERROR_RATE:-0.0}
+      CHAOS_LATENCY_MS: ${CHAOS_LATENCY_MS:-0}
+    ports: ["8100:8100"]
+
+  api:
+    build: .
+    environment: *app-env
+    ports: ["8000:8000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      temporal: { condition: service_started }
+      erp-mock: { condition: service_started }
+    restart: on-failure
+
+  worker:
+    build: .
+    command: ["python", "-m", "aiw.worker.main"]
+    environment: *app-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      temporal: { condition: service_started }
+      erp-mock: { condition: service_started }
+    restart: on-failure
+
+volumes:
+  pgdata:
