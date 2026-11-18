@@ -1,50 +1,38 @@
-[project]
-name = "opspilot"
-version = "0.1.0"
-description = "OpsPilot — Enterprise AI automation platform: AI agent + ERP/POS integration with human approval"
-requires-python = ">=3.12"
-dependencies = [
-    "anthropic>=0.70",
-    "fastapi>=0.115",
-    "uvicorn[standard]>=0.30",
-    "pydantic>=2.8",
-    "pydantic-settings>=2.4",
-    "sqlalchemy[asyncio]>=2.0.30",
-    "asyncpg>=0.29",
-    "aiosqlite>=0.20",
-    "httpx>=0.27",
-    "tenacity>=8.5",
-    "pyjwt>=2.9",
-    "langgraph>=0.2.40",
-    "temporalio>=1.8",
-]
+# uv workspace root (virtual: not a package itself). `uv sync` installs every member + dev tools.
+[tool.uv.workspace]
+members = ["packages/*", "apps/*"]
 
-[project.optional-dependencies]
-observability = ["langfuse>=2.50"]
+[tool.uv.sources]
+opspilot-core = { workspace = true }
+opspilot-erp-mock = { workspace = true }
+opspilot-agent = { workspace = true }
+opspilot-knowledge = { workspace = true }
 
 [dependency-groups]
 dev = [
+    "opspilot-core",
+    "opspilot-erp-mock",
+    "opspilot-agent",
+    "opspilot-knowledge",
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "ruff>=0.6",
 ]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/opspilot"]
-
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-testpaths = ["tests"]
+testpaths = ["packages", "apps"]
+# Each package has its own tests/conftest.py; importlib mode keeps same-named modules apart.
+addopts = "--import-mode=importlib"
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "ASYNC"]
+select = ["E", "F", "I", "B", "UP", "ASYNC", "TID251"]
 ignore = ["E501"]  # formatter owns line length; long Thai strings stay unbroken
+
+[tool.ruff.lint.isort]
+known-first-party = ["opspilot_core", "opspilot_erp_mock", "opspilot_agent", "opspilot_knowledge"]

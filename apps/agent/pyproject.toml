@@ -1,0 +1,27 @@
+[project]
+name = "opspilot-agent"
+version = "0.1.0"
+description = "OpsPilot Agent: AI agent on ERP/POS with role policy and human approval"
+requires-python = ">=3.12"
+dependencies = [
+    "opspilot-core",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "httpx>=0.27",
+    "tenacity>=8.5",
+    "langgraph>=0.2.40",
+    "temporalio>=1.8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/opspilot_agent"]
+
+[tool.uv.sources]
+opspilot-core = { workspace = true }
+
+[project.optional-dependencies]
+observability = ["langfuse>=2.50"]

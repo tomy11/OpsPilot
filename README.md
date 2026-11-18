@@ -10,7 +10,29 @@ workflow executes it with retries and idempotency.
 | **OpsPilot Knowledge** | built | Permission-aware hybrid RAG over internal documents, with verified citations |
 | **OpsPilot DocFlow** | planned | Invoice/receipt extraction, validation and review queue into the ERP |
 
-All three share the same core (auth, audit, LLM client, workflows).
+A uv workspace monorepo: each module is its own package and service, and all of them build on
+`opspilot-core`. Services talk to each other over HTTP only; a lint rule (`TID251`) fails the build
+if one app imports another.
+
+```mermaid
+flowchart LR
+    subgraph packages
+        core["opspilot-core<br/>config, JWT auth, audit + PII masking,<br/>Claude client, shared API routes"]
+    end
+    subgraph apps
+        agent["opspilot-agent :8000<br/>LangGraph agent, approvals, Temporal worker"]
+        knowledge["opspilot-knowledge :8200<br/>permission-aware RAG"]
+        erp["opspilot-erp-mock :8100"]
+    end
+    agent -- depends on --> core
+    knowledge -- depends on --> core
+    agent -- "HTTP: POST /knowledge/search<br/>(on-behalf-of user token)" --> knowledge
+    agent -- HTTP --> erp
+```
+
+When the agent searches the knowledge base it mints a 2-minute token carrying the **user's** id,
+role and department, so Knowledge applies that user's access filter. The agent can never read a
+document the user could not open directly.
 
 ## Architecture
 
@@ -54,7 +76,7 @@ Key design choices:
 | Concern | How |
 |---|---|
 | LLM never writes directly | Write tools become `ApprovalRequest` rows; only the workflow executes them |
-| Permissions | `agent/policy.py` — role check per tool, approver rules (no self-approval, same department) |
+| Permissions | `opspilot_agent/policy.py` — role check per tool, approver rules (no self-approval, same department) |
 | Tool input safety | Strict tool schemas + Pydantic validation before any call |
 | Exactly-once writes | Conditional status transitions in DB + ERP `Idempotency-Key` = approval id |
 | Long waits / crashes | Temporal workflow waits up to 24h for a decision, survives restarts, expires otherwise |
@@ -92,7 +114,7 @@ flowchart LR
 | Audit | Every ask logs retrieved and cited document ids (question PII-masked); ingest/removal logged |
 | Embeddings | `hash` (offline, deterministic) or `voyage` (Voyage AI API) behind one `Embedder` protocol |
 
-Seed documents with access front-matter live in `docs/knowledge/` (one is HR-manager-only salary data,
+Seed documents with access front-matter live in `apps/knowledge/seed/` (one is HR-manager-only salary data,
 one is finance-only) and load at startup.
 
 ```bash
@@ -104,7 +126,7 @@ curl -s localhost:8000/knowledge/ask -H "$H" -H 'content-type: application/json'
 
 ### Eval
 
-`evals/knowledge_eval.py` runs 29 cases, each as a specific `role@department`, covering answerable,
+`apps/knowledge/evals/knowledge_eval.py` runs 29 cases, each as a specific `role@department`, covering answerable,
 off-topic and not-permitted questions. With the offline hashing embedder:
 
 | hit@3 | MRR | grounded | wrong answer | correct refusal | ACL leaks |
@@ -120,18 +142,26 @@ a regression gate, not a quality claim.
 ## Layout
 
 ```
-src/opspilot/
-  core/        config, db models, JWT auth, audit (PII masking), LLM client (Anthropic SDK)
-  agent/       tools, policy, LangGraph loop, ERP client, approvals state machine, fake LLM
-  knowledge/   models + ACL, chunking, tokeniser, embeddings, hybrid retrieval, grounded answering
-  worker/      Temporal ApprovalWorkflow + activities + worker entrypoint
-  api/         FastAPI app, routes (agent runs, approvals, audit, dev auth), orchestrators
-  mocks/erp_pos/  mock ERP/POS with idempotency + chaos knobs
-docs/knowledge/  seed documents with access front-matter
-evals/         knowledge retrieval/answer eval (cases + runner)
-tests/         policy, ERP client, agent API, knowledge (ACL, citations, versioning), Temporal workflow
-scripts/demo.sh  happy-path demo
+pyproject.toml               workspace root: members, dev tools, ruff + pytest config
+packages/core/               opspilot-core: config, DB base + audit table, JWT auth, audit (PII masking),
+                             Claude client, shared FastAPI deps/routes (/health, /auth/dev-token, /audit)
+apps/agent/                  opspilot-agent
+  src/opspilot_agent/        tools, policy, LangGraph loop, ERP + Knowledge clients, approvals, fake LLM
+    api/                     FastAPI app, agent-run and approval routes, orchestrators
+    worker/                  Temporal ApprovalWorkflow + activities + worker entrypoint
+  tests/                     policy, ERP client, agent API, Temporal workflow, Agent->Knowledge over HTTP
+apps/knowledge/              opspilot-knowledge
+  src/opspilot_knowledge/    models + ACL, chunking, tokeniser, embeddings, retrieval, grounded answers, API
+  seed/                      seed documents with access front-matter
+  evals/                     retrieval/answer eval (cases + runner)
+  tests/                     ACL, citations, versioning, publishing rights, eval gate
+apps/erp-mock/               opspilot-erp-mock: mock ERP/POS with idempotency + chaos knobs
+scripts/demo.sh              happy-path demo
 ```
+
+Add a module (e.g. DocFlow): create `apps/docflow/` with its own `pyproject.toml` depending on
+`opspilot-core`, a `ruff.toml` that bans importing the other apps, and a service entry in
+`docker-compose.yml`. The workspace picks it up through `members = ["packages/*", "apps/*"]`.
 
 ## Run
 
@@ -139,18 +169,22 @@ Local, no Docker (fake LLM, inline approvals, SQLite):
 
 ```bash
 uv sync
-uv run uvicorn opspilot.mocks.erp_pos.app:app --port 8100 &
-DATABASE_URL=sqlite+aiosqlite:///./dev.db APPROVAL_BACKEND=inline LLM_PROVIDER=fake \
-  uv run uvicorn opspilot.api.main:app --port 8000
+uv run uvicorn opspilot_erp_mock.app:app --port 8100 &
+DATABASE_URL=sqlite+aiosqlite:///./knowledge.db uv run uvicorn opspilot_knowledge.main:app --port 8200 &
+DATABASE_URL=sqlite+aiosqlite:///./agent.db APPROVAL_BACKEND=inline \
+  uv run uvicorn opspilot_agent.api.main:app --port 8000
 ./scripts/demo.sh
 ```
 
-Full stack (Postgres + Temporal + worker):
+Full stack (Postgres + Temporal + worker + all services):
 
 ```bash
 docker compose up --build
 ./scripts/demo.sh            # Temporal UI: http://localhost:8233
 ```
+
+One `Dockerfile` builds any member: `docker build --build-arg PACKAGE=opspilot-knowledge .`
+installs only that package and its dependencies.
 
 Use real Claude: set `LLM_PROVIDER=anthropic` and `ANTHROPIC_API_KEY` (model defaults to
 `claude-opus-5-5`, effort `medium`, server-side refusal fallback on).
@@ -160,9 +194,10 @@ Chaos testing: `CHAOS_ERROR_RATE=0.3 CHAOS_LATENCY_MS=500 docker compose up erp-
 ## Test
 
 ```bash
-uv run pytest -q     # first run downloads Temporal's test server (~1 min)
-uv run ruff check .
-uv run python evals/knowledge_eval.py
+uv run pytest -q                                  # whole workspace; first run downloads Temporal's test server
+uv run pytest -q apps/knowledge                   # one package
+uv run ruff check . && uv run ruff format --check .
+uv run python apps/knowledge/evals/knowledge_eval.py
 ```
 
 ## Next
@@ -170,6 +205,6 @@ uv run python evals/knowledge_eval.py
 - Agent eval set (30–50 scenarios): tool-selection accuracy, task success, unauthorized-action rate
 - Langfuse tracing on LLM calls and tool steps
 - Alembic migrations instead of `create_all`
-- Real IdP (OIDC) instead of `/auth/dev-token`
+- Real IdP (OIDC + JWKS) instead of `/auth/dev-token` and the shared HS256 secret
 - Knowledge: push BM25/cosine into Postgres (pgvector `<=>`, `tsvector`) for large corpora; Thai word segmentation (PyThaiNLP); PDF/DOCX ingestion; reranker
 - Project C: OpsPilot DocFlow

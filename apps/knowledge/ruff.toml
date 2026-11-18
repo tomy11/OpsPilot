@@ -1,0 +1,5 @@
+# Module boundary: Knowledge is a standalone service and never imports other apps.
+extend = "../../pyproject.toml"
+
+[lint.flake8-tidy-imports.banned-api]
+"opspilot_agent".msg = "apps must not import each other"

@@ -1,15 +1,17 @@
-x-app-env: &app-env
+x-core-env: &core-env
   APP_ENV: dev
-  JWT_SECRET: ${JWT_SECRET:-change-me-dev-only}
+  JWT_SECRET: ${JWT_SECRET:-change-me-dev-only}  # shared: every service verifies the same tokens
   DATABASE_URL: postgresql+asyncpg://opspilot:opspilot@postgres:5432/opspilot
-  ERP_BASE_URL: http://erp-mock:8100
-  APPROVAL_BACKEND: temporal
-  TEMPORAL_HOST: temporal:7233
   LLM_PROVIDER: ${LLM_PROVIDER:-fake}
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
   LLM_MODEL: ${LLM_MODEL:-claude-opus-5-5}
-  EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-hash}
-  VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
+
+x-agent-env: &agent-env
+  <<: *core-env
+  ERP_BASE_URL: http://erp-mock:8100
+  KNOWLEDGE_BASE_URL: http://knowledge:8200
+  APPROVAL_BACKEND: temporal
+  TEMPORAL_HOST: temporal:7233
 
 services:
   postgres:
@@ -45,27 +47,41 @@ services:
     depends_on: [temporal]
 
   erp-mock:
-    build: .
-    command: ["uvicorn", "opspilot.mocks.erp_pos.app:app", "--host", "0.0.0.0", "--port", "8100"]
+    build: { context: ., args: { PACKAGE: opspilot-erp-mock } }
+    command: ["uvicorn", "opspilot_erp_mock.app:app", "--host", "0.0.0.0", "--port", "8100"]
     environment:
       CHAOS_ERROR_RATE: ${CHAOS_ERROR_RATE:-0.0}
       CHAOS_LATENCY_MS: ${CHAOS_LATENCY_MS:-0}
     ports: ["8100:8100"]
 
-  api:
-    build: .
-    environment: *app-env
+  knowledge:
+    build: { context: ., args: { PACKAGE: opspilot-knowledge } }
+    command: ["uvicorn", "opspilot_knowledge.main:app", "--host", "0.0.0.0", "--port", "8200"]
+    environment:
+      <<: *core-env
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-hash}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
+    ports: ["8200:8200"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: on-failure
+
+  agent:
+    build: { context: ., args: { PACKAGE: opspilot-agent } }
+    command: ["uvicorn", "opspilot_agent.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment: *agent-env
     ports: ["8000:8000"]
     depends_on:
       postgres: { condition: service_healthy }
       temporal: { condition: service_started }
       erp-mock: { condition: service_started }
+      knowledge: { condition: service_started }
     restart: on-failure
 
   worker:
-    build: .
-    command: ["python", "-m", "opspilot.worker.main"]
-    environment: *app-env
+    build: { context: ., args: { PACKAGE: opspilot-agent } }
+    command: ["python", "-m", "opspilot_agent.worker.main"]
+    environment: *agent-env
     depends_on:
       postgres: { condition: service_healthy }
       temporal: { condition: service_started }

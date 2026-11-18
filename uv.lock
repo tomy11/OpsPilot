@@ -2,6 +2,25 @@ version = 1
 revision = 2
 requires-python = ">=3.12"
 
+[manifest]
+members = [
+    "opspilot-agent",
+    "opspilot-core",
+    "opspilot-erp-mock",
+    "opspilot-knowledge",
+]
+
+[manifest.dependency-groups]
+dev = [
+    { name = "opspilot-agent", editable = "apps/agent" },
+    { name = "opspilot-core", editable = "packages/core" },
+    { name = "opspilot-erp-mock", editable = "apps/erp-mock" },
+    { name = "opspilot-knowledge", editable = "apps/knowledge" },
+    { name = "pytest", specifier = ">=8.3" },
+    { name = "pytest-asyncio", specifier = ">=0.24" },
+    { name = "ruff", specifier = ">=0.6" },
+]
+
 [[package]]
 name = "aiosqlite"
 version = "0.22.1"
@@ -967,20 +986,14 @@ wheels = [
 ]
 
 [[package]]
-name = "opspilot"
+name = "opspilot-agent"
 version = "0.1.0"
-source = { editable = "." }
+source = { editable = "apps/agent" }
 dependencies = [
-    { name = "aiosqlite" },
-    { name = "anthropic" },
-    { name = "asyncpg" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "langgraph" },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "pyjwt" },
-    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "opspilot-core" },
     { name = "temporalio" },
     { name = "tenacity" },
     { name = "uvicorn", extra = ["standard"] },
@@ -991,11 +1004,32 @@ observability = [
     { name = "langfuse" },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "langfuse", marker = "extra == 'observability'", specifier = ">=2.50" },
+    { name = "langgraph", specifier = ">=0.2.40" },
+    { name = "opspilot-core", editable = "packages/core" },
+    { name = "temporalio", specifier = ">=1.8" },
+    { name = "tenacity", specifier = ">=8.5" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
+]
+provides-extras = ["observability"]
+
+[[package]]
+name = "opspilot-core"
+version = "0.1.0"
+source = { editable = "packages/core" }
+dependencies = [
+    { name = "aiosqlite" },
+    { name = "anthropic" },
+    { name = "asyncpg" },
+    { name = "fastapi" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "pyjwt" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
 ]
 
 [package.metadata]
@@ -1004,24 +1038,46 @@ requires-dist = [
     { name = "anthropic", specifier = ">=0.70" },
     { name = "asyncpg", specifier = ">=0.29" },
     { name = "fastapi", specifier = ">=0.115" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "langfuse", marker = "extra == 'observability'", specifier = ">=2.50" },
-    { name = "langgraph", specifier = ">=0.2.40" },
     { name = "pydantic", specifier = ">=2.8" },
     { name = "pydantic-settings", specifier = ">=2.4" },
     { name = "pyjwt", specifier = ">=2.9" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.30" },
-    { name = "temporalio", specifier = ">=1.8" },
-    { name = "tenacity", specifier = ">=8.5" },
+]
+
+[[package]]
+name = "opspilot-erp-mock"
+version = "0.1.0"
+source = { editable = "apps/erp-mock" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "pydantic" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "pydantic", specifier = ">=2.8" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
 ]
-provides-extras = ["observability"]
 
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=8.3" },
-    { name = "pytest-asyncio", specifier = ">=0.24" },
-    { name = "ruff", specifier = ">=0.6" },
+[[package]]
+name = "opspilot-knowledge"
+version = "0.1.0"
+source = { editable = "apps/knowledge" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "opspilot-core" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "opspilot-core", editable = "packages/core" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
 ]
 
 [[package]]

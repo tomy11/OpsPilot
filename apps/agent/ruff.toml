@@ -1,0 +1,8 @@
+# Module boundary: the agent reaches Knowledge over HTTP (knowledge_client.py), never by import.
+extend = "../../pyproject.toml"
+
+[lint.flake8-tidy-imports.banned-api]
+"opspilot_knowledge".msg = "apps must not import each other; use opspilot_agent.knowledge_client"
+
+[lint.per-file-ignores]
+"tests/**" = ["TID251"]  # integration tests boot the real Knowledge app in-process
