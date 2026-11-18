@@ -66,6 +66,19 @@ services:
       postgres: { condition: service_healthy }
     restart: on-failure
 
+  docflow:
+    build: { context: ., args: { PACKAGE: opspilot-docflow } }
+    command: ["uvicorn", "opspilot_docflow.main:app", "--host", "0.0.0.0", "--port", "8300"]
+    environment:
+      <<: *core-env
+      ERP_BASE_URL: http://erp-mock:8100
+      AUTO_POST_LIMIT: ${AUTO_POST_LIMIT:-5000}
+    ports: ["8300:8300"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      erp-mock: { condition: service_started }
+    restart: on-failure
+
   agent:
     build: { context: ., args: { PACKAGE: opspilot-agent } }
     command: ["uvicorn", "opspilot_agent.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

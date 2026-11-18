@@ -2,4 +2,5 @@
 extend = "../../pyproject.toml"
 
 [lint.flake8-tidy-imports.banned-api]
+"opspilot_docflow".msg = "apps must not import each other"
 "opspilot_agent".msg = "apps must not import each other"

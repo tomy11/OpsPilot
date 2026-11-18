@@ -41,3 +41,14 @@ def decode_token(token: str, settings: CoreSettings) -> User:
         return User(id=payload["sub"], role=Role(payload["role"]), department=payload["dept"])
     except (jwt.PyJWTError, KeyError, ValueError) as exc:
         raise AuthError("invalid token") from exc
+
+
+def approval_denied_reason(approver: User, *, requested_by: str, department: str) -> str | None:
+    """Four-eyes rule shared by every approval in OpsPilot. None means the approver may decide."""
+    if approver.role not in (Role.MANAGER, Role.ADMIN):
+        return "only managers or admins can approve"
+    if approver.id == requested_by:
+        return "requester cannot approve their own request"
+    if approver.role is Role.MANAGER and approver.department != department:
+        return "manager must belong to the requesting department"
+    return None

@@ -4,6 +4,7 @@
 `FakeLLM` lives in `opspilot_agent.fake_llm` and gives a deterministic planner for tests and offline demos.
 """
 
+import json
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -50,11 +51,50 @@ class AnthropicLLM:
         self.settings = settings
         self.client = client or anthropic.AsyncAnthropic()
 
+    async def _create(self, params: dict[str, Any]) -> Any:
+        anthropic = self._sdk
+        try:
+            if self.settings.llm_server_fallback:
+                # Server-side fallback: if the model declines, the API re-runs on a fallback model.
+                return await self.client.beta.messages.create(
+                    betas=["server-side-fallback-2026-07-01"], fallbacks="default", **params
+                )
+            return await self.client.messages.create(**params)
+        except anthropic.RateLimitError as exc:
+            raise LLMError("LLM rate limited, retry later") from exc
+        except anthropic.APIStatusError as exc:
+            raise LLMError(f"LLM API error {exc.status_code}") from exc
+        except anthropic.APIConnectionError as exc:
+            raise LLMError("LLM connection error") from exc
+
+    async def structured(
+        self, *, system: str, content: list[dict[str, Any]], schema: dict[str, Any]
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """One user turn -> JSON matching `schema` (structured outputs). Returns (data, usage)."""
+        s = self.settings
+        response = await self._create(
+            {
+                "model": s.llm_model,
+                "max_tokens": s.llm_max_tokens,
+                "system": system,
+                "messages": [{"role": "user", "content": content}],
+                "output_config": {
+                    "effort": s.llm_effort,
+                    "format": {"type": "json_schema", "schema": schema},
+                },
+            }
+        )
+        if response.stop_reason == "refusal":
+            raise LLMError("model declined the request")
+        if response.stop_reason == "max_tokens":
+            raise LLMError("LLM response truncated (max_tokens)")
+        text = next(b.text for b in response.content if b.type == "text")
+        return json.loads(text), response.usage.model_dump(mode="json", exclude_none=True)
+
     async def respond(
         self, *, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
     ) -> LLMTurn:
         s = self.settings
-        anthropic = self._sdk
         params: dict[str, Any] = {
             "model": s.llm_model,
             "max_tokens": s.llm_max_tokens,
@@ -64,20 +104,7 @@ class AnthropicLLM:
         }
         if tools:
             params["tools"] = tools
-        try:
-            if s.llm_server_fallback:
-                # Server-side fallback: if the model declines, the API re-runs on a fallback model.
-                response = await self.client.beta.messages.create(
-                    betas=["server-side-fallback-2026-07-01"], fallbacks="default", **params
-                )
-            else:
-                response = await self.client.messages.create(**params)
-        except anthropic.RateLimitError as exc:
-            raise LLMError("LLM rate limited, retry later") from exc
-        except anthropic.APIStatusError as exc:
-            raise LLMError(f"LLM API error {exc.status_code}") from exc
-        except anthropic.APIConnectionError as exc:
-            raise LLMError("LLM connection error") from exc
+        response = await self._create(params)
 
         if response.stop_reason == "refusal":
             return LLMTurn(content=[], text="ขออภัย ไม่สามารถดำเนินการคำขอนี้ได้", stop_reason="refusal")

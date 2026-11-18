@@ -8,7 +8,7 @@ workflow executes it with retries and idempotency.
 |---|---|---|
 | **OpsPilot Agent** | built | AI agent on ERP/POS APIs with role policy and human approval |
 | **OpsPilot Knowledge** | built | Permission-aware hybrid RAG over internal documents, with verified citations |
-| **OpsPilot DocFlow** | planned | Invoice/receipt extraction, validation and review queue into the ERP |
+| **OpsPilot DocFlow** | built | Invoice/receipt extraction, deterministic validation, review queue and ERP posting |
 
 A uv workspace monorepo: each module is its own package and service, and all of them build on
 `opspilot-core`. Services talk to each other over HTTP only; a lint rule (`TID251`) fails the build
@@ -22,8 +22,11 @@ flowchart LR
     subgraph apps
         agent["opspilot-agent :8000<br/>LangGraph agent, approvals, Temporal worker"]
         knowledge["opspilot-knowledge :8200<br/>permission-aware RAG"]
+        docflow["opspilot-docflow :8300<br/>invoice extraction + review"]
         erp["opspilot-erp-mock :8100"]
     end
+    docflow -- depends on --> core
+    docflow -- HTTP --> erp
     agent -- depends on --> core
     knowledge -- depends on --> core
     agent -- "HTTP: POST /knowledge/search<br/>(on-behalf-of user token)" --> knowledge
@@ -139,6 +142,51 @@ cannot bridge: the answerer cited the wrong document. A multilingual embedding m
 The cases are small and the thresholds were tuned on the same documents, so treat these numbers as
 a regression gate, not a quality claim.
 
+## OpsPilot DocFlow
+
+```mermaid
+flowchart LR
+    U[upload PDF / image / text] --> E["extract<br/>Claude structured output<br/>(transcribe only)"]
+    E -->|fails| F[extraction_failed]
+    E --> V["validate (code, not LLM)<br/>tax ID checksum, arithmetic, VAT 7%,<br/>dates, duplicates, vendor + PO match"]
+    V -->|no issues and total ≤ 5,000| A[approved by system]
+    V -->|any issue or larger| R[needs_review]
+    F -->|reviewer types fields| R
+    R -->|correct fields| V
+    R -->|approve: no errors left| A
+    R -->|reject| X[rejected]
+    A -->|POST /ap-invoices<br/>Idempotency-Key = doc id| P[posted]
+    A -->|ERP error| PF[post_failed]
+    PF -->|retry| A
+```
+
+| Concern | How |
+|---|---|
+| LLM reads, code decides | Claude only transcribes into a strict JSON schema (structured outputs). The prompt forbids fixing numbers, so wrong totals on the paper stay visible to the validator |
+| Validation | `validation.py` is a pure function: Thai tax ID mod-11 checksum, line/subtotal/VAT/total arithmetic (1 satang tolerance), date sanity, Buddhist-era years, duplicate invoice (ERP + in-flight documents), vendor master and PO match. Errors block approval; warnings need a human |
+| Straight-through processing | Only documents with **zero** issues and a total ≤ `AUTO_POST_LIMIT` (5,000 THB) post without a reviewer |
+| Four-eyes | Same rule as agent approvals, now shared in `opspilot_core.auth.approval_denied_reason`: manager of the department or admin, never the uploader. Denied attempts are audited |
+| Corrections | Reviewer edits are re-validated from scratch; the audit log keeps before/after per field, and the original model output is kept, so corrections become eval data |
+| Exactly-once posting | Conditional status updates (409 on double clicks) + ERP `Idempotency-Key` = document id; failed posts are retried from `post_failed` without creating a second AP invoice |
+| ERP outages | Lookup failures become `*_unchecked` warnings (never a false "unknown vendor") and stop auto-posting |
+| Prompt injection | The document is wrapped as data and the model has no tools; the worst it can do is mis-transcribe, which validation and review catch |
+| Visibility | Staff see their uploads, managers their department, admins all; others get 404 |
+
+```bash
+H="Authorization: Bearer $(curl -s localhost:8300/auth/dev-token -H 'content-type: application/json' \
+  -d '{"user_id":"u1","role":"staff","department":"ops"}' | jq -r .access_token)"
+curl -s localhost:8300/docflow/documents -H "$H" -F "file=@apps/docflow/samples/siam-coffee-bad-math.txt;type=text/plain" | jq '.status, .issues'
+```
+
+### Eval
+
+`apps/docflow/evals/docflow_eval.py` uploads each sample through the API and scores field accuracy,
+issue recall, false issues on clean documents, routing (posted vs review) and unsafe auto-posts
+(must be 0). With the offline text extractor all five cases pass. That checks parsing, validation
+and routing, **not** Claude's reading of real scans: the samples are text files. To measure
+extraction quality, add scanned PDFs/photos with ground truth to `cases.jsonl` and run with
+`LLM_PROVIDER=anthropic`.
+
 ## Layout
 
 ```
@@ -155,11 +203,16 @@ apps/knowledge/              opspilot-knowledge
   seed/                      seed documents with access front-matter
   evals/                     retrieval/answer eval (cases + runner)
   tests/                     ACL, citations, versioning, publishing rights, eval gate
-apps/erp-mock/               opspilot-erp-mock: mock ERP/POS with idempotency + chaos knobs
+apps/docflow/                opspilot-docflow
+  src/opspilot_docflow/      schema, extractors (Claude + offline), validation, lifecycle service, API
+  samples/                   sample invoices/receipts (clean, bad math, bad tax ID, not an invoice)
+  evals/                     end-to-end extraction/validation/routing eval
+  tests/                     validation rules, extractor requests, API lifecycle, eval gate
+apps/erp-mock/               opspilot-erp-mock: orders, inventory, vendors, POs, AP invoices; idempotency + chaos
 scripts/demo.sh              happy-path demo
 ```
 
-Add a module (e.g. DocFlow): create `apps/docflow/` with its own `pyproject.toml` depending on
+Add a module: create `apps/<name>/` with its own `pyproject.toml` depending on
 `opspilot-core`, a `ruff.toml` that bans importing the other apps, and a service entry in
 `docker-compose.yml`. The workspace picks it up through `members = ["packages/*", "apps/*"]`.
 
@@ -171,6 +224,7 @@ Local, no Docker (fake LLM, inline approvals, SQLite):
 uv sync
 uv run uvicorn opspilot_erp_mock.app:app --port 8100 &
 DATABASE_URL=sqlite+aiosqlite:///./knowledge.db uv run uvicorn opspilot_knowledge.main:app --port 8200 &
+DATABASE_URL=sqlite+aiosqlite:///./docflow.db uv run uvicorn opspilot_docflow.main:app --port 8300 &
 DATABASE_URL=sqlite+aiosqlite:///./agent.db APPROVAL_BACKEND=inline \
   uv run uvicorn opspilot_agent.api.main:app --port 8000
 ./scripts/demo.sh
@@ -198,6 +252,7 @@ uv run pytest -q                                  # whole workspace; first run d
 uv run pytest -q apps/knowledge                   # one package
 uv run ruff check . && uv run ruff format --check .
 uv run python apps/knowledge/evals/knowledge_eval.py
+uv run python apps/docflow/evals/docflow_eval.py
 ```
 
 ## Next
@@ -207,4 +262,4 @@ uv run python apps/knowledge/evals/knowledge_eval.py
 - Alembic migrations instead of `create_all`
 - Real IdP (OIDC + JWKS) instead of `/auth/dev-token` and the shared HS256 secret
 - Knowledge: push BM25/cosine into Postgres (pgvector `<=>`, `tsvector`) for large corpora; Thai word segmentation (PyThaiNLP); PDF/DOCX ingestion; reranker
-- Project C: OpsPilot DocFlow
+- DocFlow: async extraction queue (Temporal) for large batches; object storage instead of DB blobs; 3-way match with goods receipts; scanned-PDF eval set for Claude

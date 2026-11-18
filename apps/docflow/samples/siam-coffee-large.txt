@@ -1,0 +1,13 @@
+TAX INVOICE
+Vendor: บริษัท สยามคอฟฟี่ จำกัด
+Tax ID: 0105550123451
+Invoice No: SC-2026-0318
+Invoice Date: 2026-11-10
+Due Date: 2026-12-10
+PO No: PO-2001
+Currency: THB
+Items:
+- Arabica beans 1kg | SKU-COFFEE | 20 | 450.00 | 9,000.00
+Subtotal: 9,000.00
+VAT 7%: 630.00
+Total: 9,630.00

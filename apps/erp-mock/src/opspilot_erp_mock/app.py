@@ -1,6 +1,6 @@
 """Mock ERP/POS service.
 
-In-memory orders and inventory, Idempotency-Key support on writes, and chaos knobs
+In-memory orders, inventory, vendors, purchase orders and AP invoices, Idempotency-Key support on writes, and chaos knobs
 (CHAOS_ERROR_RATE, CHAOS_LATENCY_MS) to exercise retries and failure handling.
 """
 
@@ -40,6 +40,38 @@ SEED_INVENTORY = {
     ("ladprao", "SKU-COFFEE"): 8,
 }
 
+SEED_VENDORS = {
+    "0105550123451": {
+        "tax_id": "0105550123451",
+        "name": "บริษัท สยามคอฟฟี่ จำกัด",
+        "vendor_id": "V-001",
+    },
+    "0105560987653": {
+        "tax_id": "0105560987653",
+        "name": "Thai Dairy Supply Co., Ltd.",
+        "vendor_id": "V-002",
+    },
+}
+
+SEED_POS = {
+    "PO-2001": {
+        "id": "PO-2001",
+        "vendor_tax_id": "0105550123451",
+        "branch": "silom",
+        "status": "open",
+        "lines": [{"sku": "SKU-COFFEE", "qty": 20, "unit_price": 450.0}],
+        "total_before_vat": 9000.0,
+    },
+    "PO-2002": {
+        "id": "PO-2002",
+        "vendor_tax_id": "0105560987653",
+        "branch": "bangna",
+        "status": "open",
+        "lines": [{"sku": "SKU-MILK", "qty": 30, "unit_price": 85.0}],
+        "total_before_vat": 2550.0,
+    },
+}
+
 OrderStatus = Literal["pending", "confirmed", "on_hold", "cancelled", "fulfilled"]
 
 
@@ -63,6 +95,28 @@ class InventoryAdjustIn(BaseModel):
     reason: str
 
 
+class ApInvoiceLineIn(BaseModel):
+    description: str
+    sku: str | None = None
+    qty: float
+    unit_price: float
+    amount: float
+
+
+class ApInvoiceIn(BaseModel):
+    vendor_tax_id: str
+    invoice_number: str
+    invoice_date: str
+    due_date: str | None = None
+    po_number: str | None = None
+    currency: str = "THB"
+    subtotal: float
+    vat_amount: float
+    total: float
+    lines: list[ApInvoiceLineIn]
+    source_document_id: str
+
+
 class Store:
     def __init__(self) -> None:
         self.reset()
@@ -71,6 +125,9 @@ class Store:
         self.orders = copy.deepcopy(SEED_ORDERS)
         self.inventory = dict(SEED_INVENTORY)
         self.transfers: list[dict] = []
+        self.vendors = copy.deepcopy(SEED_VENDORS)
+        self.purchase_orders = copy.deepcopy(SEED_POS)
+        self.ap_invoices: list[dict] = []
         self.idempotency: dict[str, dict] = {}
         self.write_count = 0
 
@@ -179,6 +236,49 @@ def create_app(error_rate: float | None = None, latency_ms: int | None = None) -
         result = {"branch": body.branch, "sku": body.sku, "on_hand": new_qty, "reason": body.reason}
         remember(idempotency_key, "adjust", result)
         return result
+
+    @app.get("/vendors/{tax_id}")
+    async def get_vendor(tax_id: str):
+        vendor = store.vendors.get(tax_id)
+        if not vendor:
+            raise HTTPException(404, f"vendor {tax_id} not found")
+        return vendor
+
+    @app.get("/purchase-orders/{po_id}")
+    async def get_purchase_order(po_id: str):
+        po = store.purchase_orders.get(po_id)
+        if not po:
+            raise HTTPException(404, f"purchase order {po_id} not found")
+        return po
+
+    @app.get("/ap-invoices")
+    async def find_ap_invoices(vendor_tax_id: str, invoice_number: str):
+        return [
+            i
+            for i in store.ap_invoices
+            if i["vendor_tax_id"] == vendor_tax_id and i["invoice_number"] == invoice_number
+        ]
+
+    @app.post("/ap-invoices", status_code=201)
+    async def create_ap_invoice(
+        body: ApInvoiceIn, idempotency_key: str | None = Header(default=None)
+    ):
+        if cached := replay(idempotency_key, "ap-invoice"):
+            return cached
+        if body.vendor_tax_id not in store.vendors:
+            raise HTTPException(422, f"unknown vendor {body.vendor_tax_id}")
+        if any(
+            i["vendor_tax_id"] == body.vendor_tax_id and i["invoice_number"] == body.invoice_number
+            for i in store.ap_invoices
+        ):
+            raise HTTPException(409, "duplicate invoice for this vendor")
+        invoice = {"id": f"AP-{uuid.uuid4().hex[:8]}", "status": "posted", **body.model_dump()}
+        store.ap_invoices.append(invoice)
+        if body.po_number in store.purchase_orders:
+            store.purchase_orders[body.po_number]["status"] = "invoiced"
+        store.write_count += 1
+        remember(idempotency_key, "ap-invoice", invoice)
+        return invoice
 
     @app.post("/_admin/reset")
     async def reset():

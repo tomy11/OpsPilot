@@ -4,7 +4,7 @@ import enum
 from dataclasses import dataclass
 
 from opspilot_agent.tools import ToolKind, ToolSpec
-from opspilot_core.auth import Role, User
+from opspilot_core.auth import Role, User, approval_denied_reason
 
 _RANK = {Role.STAFF: 0, Role.MANAGER: 1, Role.ADMIN: 2}
 
@@ -32,10 +32,5 @@ def authorize_tool(user: User, spec: ToolSpec) -> PolicyResult:
 
 
 def can_decide(approver: User, *, requested_by: str, department: str) -> PolicyResult:
-    if approver.role not in (Role.MANAGER, Role.ADMIN):
-        return PolicyResult(Decision.DENY, "only managers or admins can approve")
-    if approver.id == requested_by:
-        return PolicyResult(Decision.DENY, "requester cannot approve their own request")
-    if approver.role is Role.MANAGER and approver.department != department:
-        return PolicyResult(Decision.DENY, "manager must belong to the requesting department")
-    return PolicyResult(Decision.ALLOW, "ok")
+    reason = approval_denied_reason(approver, requested_by=requested_by, department=department)
+    return PolicyResult(Decision.DENY, reason) if reason else PolicyResult(Decision.ALLOW, "ok")

@@ -13,6 +13,7 @@ COPY packages/core/pyproject.toml packages/core/
 COPY apps/agent/pyproject.toml apps/agent/
 COPY apps/knowledge/pyproject.toml apps/knowledge/
 COPY apps/erp-mock/pyproject.toml apps/erp-mock/
+COPY apps/docflow/pyproject.toml apps/docflow/
 RUN uv sync --frozen --no-dev --package "$PACKAGE" --no-install-workspace
 
 COPY packages ./packages
