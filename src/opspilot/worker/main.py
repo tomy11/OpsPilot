@@ -7,7 +7,6 @@ from temporalio.client import Client
 from temporalio.worker import Worker
 
 from opspilot.agent.erp_client import ErpClient
-from opspilot.agent.sop import SopIndex
 from opspilot.agent.tools import ToolContext
 from opspilot.core.config import get_settings
 from opspilot.core.db import Database
@@ -21,7 +20,7 @@ async def main() -> None:
     db = Database(s.database_url)
     await db.create_all()
     erp = ErpClient(s.erp_base_url, timeout_s=s.erp_timeout_s)
-    acts = ApprovalActivities(db, ToolContext(erp=erp, sop=SopIndex()))
+    acts = ApprovalActivities(db, ToolContext(erp=erp))
     client = await Client.connect(s.temporal_host)
     worker = Worker(
         client,

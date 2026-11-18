@@ -62,9 +62,9 @@ class FakeLLM:
         wants_adjust = bool(re.search(r"ปรับสต็อก|adjust", low))
         source = next((b for b in BRANCHES if b in low and f"ไป {b}" not in low), None)
 
-        if (wants_transfer or wants_cancel or wants_adjust) and "search_sop" not in called:
+        if (wants_transfer or wants_cancel or wants_adjust) and "search_knowledge" not in called:
             topic = "stock transfer approval" if wants_transfer else "cancel inventory adjustments"
-            return self._call("search_sop", {"query": topic})
+            return self._call("search_knowledge", {"query": topic})
 
         if wants_adjust and "adjust_inventory" not in called:
             sku = (re.search(r"SKU-[A-Z]+", text, re.I) or ["SKU-COFFEE"])[0].upper()

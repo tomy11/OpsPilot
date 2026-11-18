@@ -1,3 +1,8 @@
+---
+title: SOP: Stock Transfer Between Branches
+departments: ops
+min_role: staff
+---
 # SOP: Stock Transfer Between Branches
 
 ## When to transfer stock

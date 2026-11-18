@@ -60,9 +60,10 @@ class AnthropicLLM:
             "max_tokens": s.llm_max_tokens,
             "system": system,
             "messages": messages,
-            "tools": tools,
             "output_config": {"effort": s.llm_effort},
         }
+        if tools:
+            params["tools"] = tools
         try:
             if s.llm_server_fallback:
                 # Server-side fallback: if the model declines, the API re-runs on a fallback model.

@@ -8,6 +8,8 @@ x-app-env: &app-env
   LLM_PROVIDER: ${LLM_PROVIDER:-fake}
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
   LLM_MODEL: ${LLM_MODEL:-claude-opus-5-5}
+  EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-hash}
+  VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
 
 services:
   postgres:

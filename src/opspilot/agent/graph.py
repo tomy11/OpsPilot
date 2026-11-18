@@ -23,7 +23,7 @@ You help staff check orders and stock and prepare changes in the ERP/POS system.
 
 How to work:
 - Look things up with the read tools before proposing any change. Check the SOPs with
-  search_sop when a change has rules (transfers, cancellations, adjustments).
+  search_knowledge when a change has rules (transfers, cancellations, adjustments).
 - Write tools (create_stock_transfer, update_order_status, adjust_inventory) do not run
   immediately: they create an approval request for a manager. Say so plainly in your answer
   and include the approval id the tool returns.
@@ -149,7 +149,7 @@ def build_agent_graph(deps: AgentDeps):
                 )
             else:
                 try:
-                    data = await spec.read(deps.tools, args)  # type: ignore[misc]
+                    data = await spec.read(deps.tools, args, deps.user)  # type: ignore[misc]
                     step |= {"status": "ok"}
                     results.append(_result(call_id, data))
                 except ErpError as exc:

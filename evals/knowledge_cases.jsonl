@@ -1,0 +1,29 @@
+{"id": "leave-01", "user": "staff@ops", "question": "ลาพักร้อนได้กี่วันต่อปี", "expect": "leave-policy.md"}
+{"id": "leave-02", "user": "staff@finance", "question": "ลาป่วยต้องมีใบรับรองแพทย์ไหม", "expect": "leave-policy.md"}
+{"id": "leave-03", "user": "staff@hr", "question": "ลากิจต้องแจ้งล่วงหน้ากี่วัน", "expect": "leave-policy.md"}
+{"id": "leave-04", "user": "manager@ops", "question": "วันลาพักร้อนที่ไม่ได้ใช้สะสมได้ไหม", "expect": "leave-policy.md"}
+{"id": "expense-01", "user": "staff@ops", "question": "เบิกค่าเดินทางต่างจังหวัดได้วันละเท่าไร", "expect": "expense-reimbursement.md"}
+{"id": "expense-02", "user": "staff@hr", "question": "ใบเสร็จต้องส่งเบิกภายในกี่วัน", "expect": "expense-reimbursement.md"}
+{"id": "expense-03", "user": "manager@finance", "question": "ค่าใช้จ่ายเกิน 5,000 บาทใครอนุมัติ", "expect": "expense-reimbursement.md"}
+{"id": "it-01", "user": "staff@ops", "question": "How long must a password be?", "expect": "password-policy.md"}
+{"id": "it-02", "user": "staff@finance", "question": "Is MFA required for VPN?", "expect": "password-policy.md"}
+{"id": "it-03", "user": "staff@hr", "question": "What should I do if my account is compromised?", "expect": "password-policy.md"}
+{"id": "ops-01", "user": "staff@ops", "question": "minimum safety stock when transferring between branches", "expect": "stock-transfer.md"}
+{"id": "ops-02", "user": "staff@ops", "question": "who approves a stock transfer", "expect": "stock-transfer.md"}
+{"id": "ops-03", "user": "manager@ops", "question": "can fulfilled orders be cancelled", "expect": "order-cancellation.md"}
+{"id": "ops-04", "user": "staff@ops", "question": "who can make manual inventory adjustments", "expect": "order-cancellation.md"}
+{"id": "fin-01", "user": "staff@finance", "question": "when is the general ledger locked", "expect": "month-end-close.md"}
+{"id": "fin-02", "user": "staff@finance", "question": "inventory valuation variance above 1%", "expect": "month-end-close.md"}
+{"id": "hr-01", "user": "manager@hr", "question": "เงินเดือนระดับ Manager อยู่ที่เท่าไร", "expect": "salary-structure.md"}
+{"id": "hr-02", "user": "manager@hr", "question": "งบปรับเงินเดือนประจำปีกี่เปอร์เซ็นต์", "expect": "salary-structure.md"}
+{"id": "acl-01", "user": "staff@hr", "question": "เงินเดือนระดับ Manager อยู่ที่เท่าไร", "expect": null, "forbid": ["salary-structure.md"]}
+{"id": "acl-02", "user": "manager@ops", "question": "งบปรับเงินเดือนประจำปีกี่เปอร์เซ็นต์", "expect": null, "forbid": ["salary-structure.md"]}
+{"id": "acl-03", "user": "admin@it", "question": "กระบอกเงินเดือนระดับ Staff", "expect": null, "forbid": ["salary-structure.md"]}
+{"id": "acl-04", "user": "staff@ops", "question": "when is the general ledger locked", "expect": null, "forbid": ["month-end-close.md"]}
+{"id": "acl-05", "user": "staff@finance", "question": "who approves a stock transfer", "expect": null, "forbid": ["stock-transfer.md"]}
+{"id": "none-01", "user": "staff@ops", "question": "what is the weather today", "expect": null}
+{"id": "none-02", "user": "staff@ops", "question": "ราคาหุ้นวันนี้", "expect": null}
+{"id": "none-03", "user": "staff@hr", "question": "ร้านอาหารแถวสีลม", "expect": null}
+{"id": "none-04", "user": "staff@finance", "question": "วิธีทำกาแฟ", "expect": null}
+{"id": "hard-01", "user": "staff@ops", "question": "ถ้าไม่สบายหยุดงานได้กี่วัน", "expect": "leave-policy.md", "note": "paraphrase: no shared keywords with 'ลาป่วย'"}
+{"id": "hard-02", "user": "staff@ops", "question": "รหัสผ่านต้องยาวอย่างน้อยกี่ตัวอักษร", "expect": "password-policy.md", "note": "cross-lingual: Thai question, English document"}

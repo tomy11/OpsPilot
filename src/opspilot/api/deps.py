@@ -12,6 +12,7 @@ from opspilot.core.auth import AuthError, Role, User, decode_token
 from opspilot.core.config import Settings
 from opspilot.core.db import Database
 from opspilot.core.llm import LLMClient
+from opspilot.knowledge.service import KnowledgeService
 
 
 @dataclass
@@ -21,6 +22,8 @@ class Services:
     tools: ToolContext
     llm: LLMClient
     orchestrator: ApprovalOrchestrator
+    knowledge: KnowledgeService
+    knowledge_llm: LLMClient
 
 
 def services(request: Request) -> Services:

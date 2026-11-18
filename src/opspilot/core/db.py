@@ -96,6 +96,8 @@ class Database:
         self.sessionmaker = async_sessionmaker(self.engine, expire_on_commit=False)
 
     async def create_all(self) -> None:
+        import opspilot.knowledge.models  # noqa: F401 - register knowledge tables on Base
+
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 

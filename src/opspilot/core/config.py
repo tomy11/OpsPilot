@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     llm_server_fallback: bool = True
     agent_max_steps: int = 8
 
+    # "hash" = offline deterministic embeddings, "voyage" = Voyage AI embeddings API
+    embedding_provider: Literal["hash", "voyage"] = "hash"
+    embedding_model: str = "voyage-3.5"
+    voyage_api_key: str = ""
+    knowledge_top_k: int = 5
+    knowledge_seed_on_startup: bool = True
+
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
     langfuse_host: str = "https://cloud.langfuse.com"

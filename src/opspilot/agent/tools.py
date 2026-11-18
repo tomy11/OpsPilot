@@ -12,8 +12,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from opspilot.agent.erp_client import ErpClient
-from opspilot.agent.sop import SopIndex
-from opspilot.core.auth import Role
+from opspilot.core.auth import Role, User
+from opspilot.knowledge.service import KnowledgeService
 
 
 class ToolKind(enum.StrEnum):
@@ -34,8 +34,8 @@ class CheckStockArgs(_Args):
     branch: str = Field(description="Branch code, or 'all' for every branch")
 
 
-class SearchSopArgs(_Args):
-    query: str = Field(description="What to look up in the internal SOPs")
+class SearchKnowledgeArgs(_Args):
+    query: str = Field(description="What to look up in internal SOPs and policies")
 
 
 class CreateStockTransferArgs(_Args):
@@ -62,10 +62,10 @@ class AdjustInventoryArgs(_Args):
 @dataclass
 class ToolContext:
     erp: ErpClient
-    sop: SopIndex
+    knowledge: KnowledgeService | None = None
 
 
-ReadHandler = Callable[[ToolContext, Any], Awaitable[dict[str, Any]]]
+ReadHandler = Callable[[ToolContext, Any, User], Awaitable[dict[str, Any]]]
 WriteHandler = Callable[[ToolContext, Any, str], Awaitable[dict[str, Any]]]
 
 
@@ -93,16 +93,25 @@ class ToolSpec:
         }
 
 
-async def _get_order(ctx: ToolContext, a: GetOrderArgs) -> dict[str, Any]:
+async def _get_order(ctx: ToolContext, a: GetOrderArgs, user: User) -> dict[str, Any]:
     return await ctx.erp.get_order(a.order_id)
 
 
-async def _check_stock(ctx: ToolContext, a: CheckStockArgs) -> dict[str, Any]:
+async def _check_stock(ctx: ToolContext, a: CheckStockArgs, user: User) -> dict[str, Any]:
     return await ctx.erp.get_inventory(a.sku, None if a.branch == "all" else a.branch)
 
 
-async def _search_sop(ctx: ToolContext, a: SearchSopArgs) -> dict[str, Any]:
-    return {"results": ctx.sop.search(a.query)}
+async def _search_knowledge(ctx: ToolContext, a: SearchKnowledgeArgs, user: User) -> dict[str, Any]:
+    if ctx.knowledge is None:
+        return {"results": [], "error": "knowledge base unavailable"}
+    # Same access filter as /knowledge/search: the agent can only read what the user can read.
+    hits = await ctx.knowledge.search_as(user, a.query, k=3)
+    return {
+        "results": [
+            {"title": h.title, "section": h.heading, "source": h.source, "text": h.text}
+            for h in hits
+        ]
+    }
 
 
 async def _create_transfer(ctx: ToolContext, a: CreateStockTransferArgs, key: str) -> dict:
@@ -137,12 +146,13 @@ TOOLS: dict[str, ToolSpec] = {
             read=_check_stock,
         ),
         ToolSpec(
-            "search_sop",
-            "Search internal SOPs and policies. Use before proposing a change to check the rules.",
-            SearchSopArgs,
+            "search_knowledge",
+            "Search internal SOPs and policies the user may access. Use before proposing a "
+            "change to check the rules.",
+            SearchKnowledgeArgs,
             ToolKind.READ,
             Role.STAFF,
-            read=_search_sop,
+            read=_search_knowledge,
         ),
         ToolSpec(
             "create_stock_transfer",
