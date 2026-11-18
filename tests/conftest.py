@@ -3,10 +3,10 @@ from collections.abc import AsyncIterator
 import httpx
 import pytest
 
-from aiw.agent.fake_llm import FakeLLM
-from aiw.api.main import create_app
-from aiw.core.config import Settings
-from aiw.mocks.erp_pos.app import create_app as create_erp_app
+from opspilot.agent.fake_llm import FakeLLM
+from opspilot.api.main import create_app
+from opspilot.core.config import Settings
+from opspilot.mocks.erp_pos.app import create_app as create_erp_app
 
 
 @pytest.fixture

@@ -1,11 +1,16 @@
-# Enterprise AI Automation Hub
+# OpsPilot — Enterprise AI Automation Platform
 
 Portfolio project: an AI agent that works with ERP/POS systems **safely**. The LLM only proposes
 changes; the backend enforces permissions, and a human approves every write before a durable
 workflow executes it with retries and idempotency.
 
-This repo currently contains the **shared core** and **Project B — AI Agent + ERP/POS + Human Approval**.
-Project A (Enterprise RAG) and Project C (Document AI) plug into the same core later.
+| Module | Status | What it does |
+|---|---|---|
+| **OpsPilot Agent** | built | AI agent on ERP/POS APIs with role policy and human approval |
+| **OpsPilot Knowledge** | planned | Permission-aware hybrid RAG over internal documents, with citations |
+| **OpsPilot DocFlow** | planned | Invoice/receipt extraction, validation and review queue into the ERP |
+
+All three share the same core (auth, audit, LLM client, workflows).
 
 ## Architecture
 
@@ -60,7 +65,7 @@ Key design choices:
 ## Layout
 
 ```
-src/aiw/
+src/opspilot/
   core/        config, db models, JWT auth, audit (PII masking), LLM client (Anthropic SDK)
   agent/       tools, policy, LangGraph loop, ERP client, approvals state machine, SOP search, fake LLM
   worker/      Temporal ApprovalWorkflow + activities + worker entrypoint
@@ -77,9 +82,9 @@ Local, no Docker (fake LLM, inline approvals, SQLite):
 
 ```bash
 uv sync
-uv run uvicorn aiw.mocks.erp_pos.app:app --port 8100 &
+uv run uvicorn opspilot.mocks.erp_pos.app:app --port 8100 &
 DATABASE_URL=sqlite+aiosqlite:///./dev.db APPROVAL_BACKEND=inline LLM_PROVIDER=fake \
-  uv run uvicorn aiw.api.main:app --port 8000
+  uv run uvicorn opspilot.api.main:app --port 8000
 ./scripts/demo.sh
 ```
 

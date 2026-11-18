@@ -4,12 +4,12 @@ from typing import Any
 from fastapi import APIRouter
 from sqlalchemy import select
 
-from aiw.agent.approvals import ApprovalConflict, transition
-from aiw.agent.graph import AgentDeps, run_agent
-from aiw.api.deps import ServicesDep, UserDep
-from aiw.api.schemas import AgentRunIn, AgentRunOut, ApprovalOut
-from aiw.core.audit import record_audit
-from aiw.core.db import AgentRun, ApprovalRequest, ApprovalStatus
+from opspilot.agent.approvals import ApprovalConflict, transition
+from opspilot.agent.graph import AgentDeps, run_agent
+from opspilot.api.deps import ServicesDep, UserDep
+from opspilot.api.schemas import AgentRunIn, AgentRunOut, ApprovalOut
+from opspilot.core.audit import record_audit
+from opspilot.core.db import AgentRun, ApprovalRequest, ApprovalStatus
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 log = logging.getLogger(__name__)

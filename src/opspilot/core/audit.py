@@ -3,7 +3,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from aiw.core.db import AuditLog
+from opspilot.core.db import AuditLog
 
 # Minimal PII masking for audit payloads (PDPA). Extend per data classification policy.
 _PII_PATTERNS = [

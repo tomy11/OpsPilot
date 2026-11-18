@@ -11,4 +11,4 @@ COPY src ./src
 COPY docs ./docs
 RUN uv sync --frozen --no-dev
 
-CMD ["uvicorn", "aiw.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "opspilot.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

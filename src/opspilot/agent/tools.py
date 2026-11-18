@@ -11,9 +11,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from aiw.agent.erp_client import ErpClient
-from aiw.agent.sop import SopIndex
-from aiw.core.auth import Role
+from opspilot.agent.erp_client import ErpClient
+from opspilot.agent.sop import SopIndex
+from opspilot.core.auth import Role
 
 
 class ToolKind(enum.StrEnum):

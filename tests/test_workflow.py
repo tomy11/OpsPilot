@@ -11,7 +11,7 @@ from temporalio.exceptions import ApplicationError
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
-from aiw.worker.workflows import ApprovalInput, ApprovalWorkflow, DecisionSignal
+from opspilot.worker.workflows import ApprovalInput, ApprovalWorkflow, DecisionSignal
 
 calls: list[tuple[str, str]] = []
 fail_mode = {"transient": 0, "permanent": False}

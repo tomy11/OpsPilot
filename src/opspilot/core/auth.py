@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 import jwt
 from pydantic import BaseModel
 
-from aiw.core.config import Settings
+from opspilot.core.config import Settings
 
 
 class Role(enum.StrEnum):

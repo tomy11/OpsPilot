@@ -11,13 +11,13 @@ class Settings(BaseSettings):
     jwt_secret: str = "change-me-dev-only"
     jwt_ttl_minutes: int = 60
 
-    database_url: str = "postgresql+asyncpg://aiw:aiw@localhost:5432/aiw"
+    database_url: str = "postgresql+asyncpg://opspilot:opspilot@localhost:5432/opspilot"
     erp_base_url: str = "http://localhost:8100"
     erp_timeout_s: float = 5.0
 
     approval_backend: Literal["temporal", "inline"] = "temporal"
     temporal_host: str = "localhost:7233"
-    temporal_task_queue: str = "aiw-approvals"
+    temporal_task_queue: str = "opspilot-approvals"
     approval_timeout_hours: int = 24
 
     llm_provider: Literal["anthropic", "fake"] = "fake"

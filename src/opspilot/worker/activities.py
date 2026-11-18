@@ -3,9 +3,9 @@ from typing import Any
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-from aiw.agent import approvals
-from aiw.agent.tools import ToolContext
-from aiw.core.db import Database
+from opspilot.agent import approvals
+from opspilot.agent.tools import ToolContext
+from opspilot.core.db import Database
 
 
 class ApprovalActivities:

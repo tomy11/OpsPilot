@@ -12,11 +12,11 @@ from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 from pydantic import ValidationError
 
-from aiw.agent.erp_client import ErpError
-from aiw.agent.policy import Decision, authorize_tool
-from aiw.agent.tools import TOOLS, ToolContext, anthropic_tool_schemas
-from aiw.core.auth import User
-from aiw.core.llm import LLMClient, LLMError
+from opspilot.agent.erp_client import ErpError
+from opspilot.agent.policy import Decision, authorize_tool
+from opspilot.agent.tools import TOOLS, ToolContext, anthropic_tool_schemas
+from opspilot.core.auth import User
+from opspilot.core.llm import LLMClient, LLMError
 
 SYSTEM_PROMPT = """You are an operations assistant for a retail company with several branches.
 You help staff check orders and stock and prepare changes in the ERP/POS system.

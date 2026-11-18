@@ -3,8 +3,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from aiw.core.auth import Role
-from aiw.core.db import ApprovalStatus
+from opspilot.core.auth import Role
+from opspilot.core.db import ApprovalStatus
 
 
 class DevTokenIn(BaseModel):

@@ -6,12 +6,12 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from aiw.agent.tools import ToolContext
-from aiw.api.orchestrator import ApprovalOrchestrator
-from aiw.core.auth import AuthError, Role, User, decode_token
-from aiw.core.config import Settings
-from aiw.core.db import Database
-from aiw.core.llm import LLMClient
+from opspilot.agent.tools import ToolContext
+from opspilot.api.orchestrator import ApprovalOrchestrator
+from opspilot.core.auth import AuthError, Role, User, decode_token
+from opspilot.core.config import Settings
+from opspilot.core.db import Database
+from opspilot.core.llm import LLMClient
 
 
 @dataclass

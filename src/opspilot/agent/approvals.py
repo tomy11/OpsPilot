@@ -9,10 +9,10 @@ from typing import Any
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from aiw.agent.erp_client import ErpError
-from aiw.agent.tools import ToolContext, execute_write
-from aiw.core.audit import record_audit
-from aiw.core.db import ApprovalRequest, ApprovalStatus, Database
+from opspilot.agent.erp_client import ErpError
+from opspilot.agent.tools import ToolContext, execute_write
+from opspilot.core.audit import record_audit
+from opspilot.core.db import ApprovalRequest, ApprovalStatus, Database
 
 
 class ApprovalConflict(Exception):

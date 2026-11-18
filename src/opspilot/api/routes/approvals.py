@@ -3,14 +3,14 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
-from aiw.agent.approvals import ApprovalConflict, transition
-from aiw.agent.policy import Decision, can_decide
-from aiw.api.deps import ServicesDep, SessionDep, UserDep
-from aiw.api.schemas import ApprovalOut, DecisionIn
-from aiw.core.audit import record_audit
-from aiw.core.auth import Role, User
-from aiw.core.db import ApprovalRequest, ApprovalStatus
-from aiw.worker.workflows import DecisionSignal
+from opspilot.agent.approvals import ApprovalConflict, transition
+from opspilot.agent.policy import Decision, can_decide
+from opspilot.api.deps import ServicesDep, SessionDep, UserDep
+from opspilot.api.schemas import ApprovalOut, DecisionIn
+from opspilot.core.audit import record_audit
+from opspilot.core.auth import Role, User
+from opspilot.core.db import ApprovalRequest, ApprovalStatus
+from opspilot.worker.workflows import DecisionSignal
 
 router = APIRouter(prefix="/approvals", tags=["approvals"])
 

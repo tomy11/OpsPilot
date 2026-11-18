@@ -3,8 +3,8 @@
 import enum
 from dataclasses import dataclass
 
-from aiw.agent.tools import ToolKind, ToolSpec
-from aiw.core.auth import Role, User
+from opspilot.agent.tools import ToolKind, ToolSpec
+from opspilot.core.auth import Role, User
 
 _RANK = {Role.STAFF: 0, Role.MANAGER: 1, Role.ADMIN: 2}
 

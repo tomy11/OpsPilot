@@ -1,4 +1,4 @@
-"""Temporal worker: `python -m aiw.worker.main`."""
+"""Temporal worker: `python -m opspilot.worker.main`."""
 
 import asyncio
 import logging
@@ -6,13 +6,13 @@ import logging
 from temporalio.client import Client
 from temporalio.worker import Worker
 
-from aiw.agent.erp_client import ErpClient
-from aiw.agent.sop import SopIndex
-from aiw.agent.tools import ToolContext
-from aiw.core.config import get_settings
-from aiw.core.db import Database
-from aiw.worker.activities import ApprovalActivities
-from aiw.worker.workflows import ApprovalWorkflow
+from opspilot.agent.erp_client import ErpClient
+from opspilot.agent.sop import SopIndex
+from opspilot.agent.tools import ToolContext
+from opspilot.core.config import get_settings
+from opspilot.core.db import Database
+from opspilot.worker.activities import ApprovalActivities
+from opspilot.worker.workflows import ApprovalWorkflow
 
 
 async def main() -> None:

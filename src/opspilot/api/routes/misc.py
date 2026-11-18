@@ -3,10 +3,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 
-from aiw.api.deps import ServicesDep, SessionDep, require_role
-from aiw.api.schemas import AuditOut, DevTokenIn, TokenOut
-from aiw.core.auth import Role, User, issue_token
-from aiw.core.db import AuditLog
+from opspilot.api.deps import ServicesDep, SessionDep, require_role
+from opspilot.api.schemas import AuditOut, DevTokenIn, TokenOut
+from opspilot.core.auth import Role, User, issue_token
+from opspilot.core.db import AuditLog
 
 router = APIRouter()
 

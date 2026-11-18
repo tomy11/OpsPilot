@@ -1,6 +1,6 @@
-from aiw.agent.policy import Decision, authorize_tool, can_decide
-from aiw.agent.tools import TOOLS
-from aiw.core.auth import Role, User
+from opspilot.agent.policy import Decision, authorize_tool, can_decide
+from opspilot.agent.tools import TOOLS
+from opspilot.core.auth import Role, User
 
 staff = User(id="s1", role=Role.STAFF, department="ops")
 manager = User(id="m1", role=Role.MANAGER, department="ops")

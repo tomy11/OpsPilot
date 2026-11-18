@@ -1,13 +1,13 @@
 """LLM client abstraction.
 
 `AnthropicLLM` calls Claude through the official Anthropic SDK (Messages API + client tools).
-`FakeLLM` lives in `aiw.agent.fake_llm` and gives a deterministic planner for tests and offline demos.
+`FakeLLM` lives in `opspilot.agent.fake_llm` and gives a deterministic planner for tests and offline demos.
 """
 
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
-from aiw.core.config import Settings
+from opspilot.core.config import Settings
 
 if TYPE_CHECKING:
     import anthropic

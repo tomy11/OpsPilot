@@ -10,7 +10,7 @@ import json
 import re
 from typing import Any
 
-from aiw.core.llm import LLMTurn, ToolCall
+from opspilot.core.llm import LLMTurn, ToolCall
 
 _ids = itertools.count(1)
 BRANCHES = ("silom", "bangna", "ladprao")

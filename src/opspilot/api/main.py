@@ -1,4 +1,4 @@
-"""FastAPI app: `uvicorn aiw.api.main:app`."""
+"""FastAPI app: `uvicorn opspilot.api.main:app`."""
 
 import logging
 from contextlib import asynccontextmanager
@@ -6,16 +6,16 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI
 
-from aiw.agent.erp_client import ErpClient
-from aiw.agent.fake_llm import FakeLLM
-from aiw.agent.sop import SopIndex
-from aiw.agent.tools import ToolContext
-from aiw.api.deps import Services
-from aiw.api.orchestrator import ApprovalOrchestrator, InlineOrchestrator, TemporalOrchestrator
-from aiw.api.routes import agent, approvals, misc
-from aiw.core.config import Settings, get_settings
-from aiw.core.db import Database
-from aiw.core.llm import AnthropicLLM, LLMClient
+from opspilot.agent.erp_client import ErpClient
+from opspilot.agent.fake_llm import FakeLLM
+from opspilot.agent.sop import SopIndex
+from opspilot.agent.tools import ToolContext
+from opspilot.api.deps import Services
+from opspilot.api.orchestrator import ApprovalOrchestrator, InlineOrchestrator, TemporalOrchestrator
+from opspilot.api.routes import agent, approvals, misc
+from opspilot.core.config import Settings, get_settings
+from opspilot.core.db import Database
+from opspilot.core.llm import AnthropicLLM, LLMClient
 
 
 def create_app(
@@ -53,7 +53,7 @@ def create_app(
             await erp.aclose()
             await db.dispose()
 
-    app = FastAPI(title="Enterprise AI Automation Hub", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="OpsPilot", version="0.1.0", lifespan=lifespan)
     app.include_router(misc.router)
     app.include_router(agent.router)
     app.include_router(approvals.router)

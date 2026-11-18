@@ -9,11 +9,11 @@ from typing import Protocol
 
 from temporalio.client import Client
 
-from aiw.agent import approvals
-from aiw.agent.erp_client import ErpError
-from aiw.agent.tools import ToolContext
-from aiw.core.db import Database
-from aiw.worker.workflows import ApprovalInput, ApprovalWorkflow, DecisionSignal
+from opspilot.agent import approvals
+from opspilot.agent.erp_client import ErpError
+from opspilot.agent.tools import ToolContext
+from opspilot.core.db import Database
+from opspilot.worker.workflows import ApprovalInput, ApprovalWorkflow, DecisionSignal
 
 log = logging.getLogger(__name__)
 

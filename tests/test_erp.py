@@ -1,8 +1,8 @@
 import httpx
 import pytest
 
-from aiw.agent.erp_client import ErpClient, ErpError
-from aiw.mocks.erp_pos.app import create_app
+from opspilot.agent.erp_client import ErpClient, ErpError
+from opspilot.mocks.erp_pos.app import create_app
 
 
 async def test_write_is_idempotent(erp_app, erp_transport):
