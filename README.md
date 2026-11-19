@@ -37,6 +37,9 @@ When the agent searches the knowledge base it mints a 2-minute token carrying th
 role and department, so Knowledge applies that user's access filter. The agent can never read a
 document the user could not open directly.
 
+Detailed flows for every service (identity, agent runs, approvals outbox, retrieval, invoice
+lifecycle, ERP sandbox, staging, audit visibility): [docs/flows.md](docs/flows.md).
+
 ## Architecture
 
 ```mermaid
