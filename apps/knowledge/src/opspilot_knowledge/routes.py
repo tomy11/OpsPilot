@@ -84,7 +84,6 @@ async def ingest_document(
         status="created" if result.created else "unchanged",
         target=result.document.id,
         detail={
-            "department": user.department,
             "source": body.source,
             "version": result.document.version,
             "departments": result.document.departments,
@@ -111,7 +110,8 @@ async def deactivate_document(
 ) -> None:
     doc = await s.get(KnowledgeDocument, document_id)
     # 404 (not 403) for documents the caller cannot even read, so ids do not leak existence.
-    if doc is None or not doc.active or not can_read(user, doc):
+    # Admins manage every document (they publish anywhere) without gaining read access to it.
+    if doc is None or not doc.active or not (can_read(user, doc) or user.role is Role.ADMIN):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "document not found")
     if not _manages(user, doc.departments):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "not allowed to remove this document")
@@ -122,7 +122,7 @@ async def deactivate_document(
         action="knowledge.document.deactivated",
         status="ok",
         target=document_id,
-        detail={"source": doc.source, "version": doc.version, "department": user.department},
+        detail={"source": doc.source, "version": doc.version},
     )
     await s.commit()
 

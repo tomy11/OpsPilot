@@ -58,6 +58,8 @@ services:
     environment:
       <<: *staging-env
       ERP_ISOLATE_RUNS: "true"
+      # Only the gateway can reach the agent, so trust its X-Forwarded-For for login throttling.
+      FORWARDED_ALLOW_IPS: "*"
       DEMO_STAFF_PASSWORD: ${DEMO_STAFF_PASSWORD:?set a staff login password}
       DEMO_MANAGER_PASSWORD: ${DEMO_MANAGER_PASSWORD:?set a distinct manager login password}
     ports: !reset []

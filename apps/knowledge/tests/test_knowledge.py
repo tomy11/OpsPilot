@@ -191,3 +191,26 @@ async def test_knowledge_eval_thresholds():
     assert m["acl_leaks"] == 0
     assert m["no_answer_acc"] == 1.0
     assert m["hit@3"] >= 0.9
+
+
+async def test_document_audit_follows_the_documents_acl_not_the_actor(api):
+    admin = await token(api, "a1", "admin", "it")
+    ops_doc = DOC | {"source": "ops/handover-by-admin"}
+    hr_doc = DOC | {"source": "hr/bonus", "departments": ["hr"], "min_role": "manager"}
+    ops_id = (await api.post("/knowledge/documents", json=ops_doc, headers=admin)).json()
+    hr_id = (await api.post("/knowledge/documents", json=hr_doc, headers=admin)).json()
+    ops_id, hr_id = ops_id["document"]["id"], hr_id["document"]["id"]
+    assert (await api.delete(f"/knowledge/documents/{ops_id}", headers=admin)).status_code == 204
+
+    async def doc_events(user, dept):
+        h = await token(api, user, "manager", dept)
+        rows = (await api.get("/audit", headers=h)).json()
+        return {(a["action"], a["target"]) for a in rows if a["action"].startswith("knowledge.doc")}
+
+    # Published by an IT admin, but it is an ops document: ops managers see it, IT managers don't.
+    assert await doc_events("m-ops", "ops") == {
+        ("knowledge.document.ingested", ops_id),
+        ("knowledge.document.deactivated", ops_id),
+    }
+    assert await doc_events("m-it", "it") == set()  # not even the HR doc's name leaks
+    assert await doc_events("m-hr", "hr") == {("knowledge.document.ingested", hr_id)}

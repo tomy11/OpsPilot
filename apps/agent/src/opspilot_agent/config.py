@@ -12,6 +12,9 @@ class AgentSettings(CoreSettings):
     erp_isolate_runs: bool = False
     demo_staff_password: SecretStr = SecretStr("")
     demo_manager_password: SecretStr = SecretStr("")
+    login_max_failures_per_ip: int = 5
+    login_max_failures_per_user: int = 20
+    login_window_s: float = 900.0
 
     knowledge_base_url: str = "http://localhost:8200"
     knowledge_timeout_s: float = 10.0

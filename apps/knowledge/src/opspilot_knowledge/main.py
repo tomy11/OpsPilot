@@ -13,6 +13,7 @@ from opspilot_knowledge import models  # noqa: F401 - register tables before cre
 from opspilot_knowledge.answer import FakeGroundedLLM
 from opspilot_knowledge.config import KnowledgeSettings, get_settings
 from opspilot_knowledge.embeddings import Embedder, HashingEmbedder, VoyageEmbedder
+from opspilot_knowledge.models import KnowledgeAcl
 from opspilot_knowledge.routes import KnowledgeState, router
 from opspilot_knowledge.service import DEFAULT_SEED_DIR, KnowledgeService
 
@@ -42,7 +43,14 @@ def create_app(
             )
         model = llm or (AnthropicLLM(s) if s.llm_provider == "anthropic" else FakeGroundedLLM())
 
-        app.state.core = CoreState(settings=s, db=db, audit_department_prefix="knowledge.")
+        # Managers see document events for documents their department can read (via the ACL rows),
+        # and questions asked by people in their department.
+        app.state.core = CoreState(
+            settings=s,
+            db=db,
+            audit_targets=((KnowledgeAcl.document_id, KnowledgeAcl.department),),
+            audit_department_prefix="knowledge.ask",
+        )
         app.state.knowledge = KnowledgeState(service=kb, llm=model)
         try:
             yield

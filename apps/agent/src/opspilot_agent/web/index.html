@@ -1,66 +1,17 @@
 <!doctype html>
 <html lang="th">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="OpsPilot · ERP operations and human approval">
-  <title>OpsPilot — Operations workspace</title>
-  <link rel="stylesheet" href="/assets/app.css">
-  <script type="module" src="/assets/app.js"></script>
-</head>
-<body>
-  <aside class="sidebar">
-    <a class="brand" href="/"><span aria-hidden="true">O</span> OpsPilot</a>
-    <nav aria-label="เมนูหลัก">
-      <button type="button" data-view="agent" aria-current="page">Agent</button>
-      <button type="button" data-view="approvals">Approvals</button>
-      <button type="button" data-view="activity">Activity</button>
-    </nav>
-    <div class="identity" id="identity" hidden>
-      <span id="account"></span>
-      <button class="plain" id="logout" type="button">ออกจากระบบ</button>
-    </div>
-  </aside>
-  <main>
-    <div id="login-view">
-      <header><p class="eyebrow">ERP / POS WORKSPACE</p><h1>เข้าสู่ OpsPilot</h1><p>ตรวจสต็อกและอนุมัติการโอนสินค้าผ่าน ERP จำลอง</p></header>
-      <form id="login" class="panel stack">
-        <label>บัญชีทดสอบ<select name="username"><option value="staff">Staff · Operations</option><option value="manager">Manager · Operations</option></select></label>
-        <label>รหัสผ่าน<input name="password" type="password" autocomplete="current-password" maxlength="256" required></label>
-        <button class="primary" type="submit">เข้าสู่ระบบ</button>
-        <p class="error" id="login-error" role="alert" hidden></p>
-      </form>
-    </div>
-    <div id="workspace" hidden>
-      <div id="workspace-error" class="error banner" role="alert" hidden></div>
-      <section id="view-agent">
-        <header><p class="eyebrow">ERP / POS WORKSPACE</p><h1>Agent</h1><p>ถามเรื่องออเดอร์ เช็กสต็อก หรือส่งคำขอโอนสินค้าให้ผู้จัดการ</p></header>
-        <div class="grid">
-          <form id="composer" class="panel stack">
-            <label for="message">คำสั่งของคุณ</label>
-            <textarea name="message" id="message" rows="5" maxlength="4000" placeholder="ระบุเลขออเดอร์และสิ่งที่ต้องการให้ตรวจสอบ" required></textarea>
-            <div class="actions"><button class="primary" type="submit">ส่งให้ Agent</button><span class="muted" id="run-progress" role="status"></span></div>
-          </form>
-          <aside class="panel stack example"><p class="eyebrow">เคสตัวอย่าง</p><h2>ออเดอร์ ORD-1001</h2><p>สาขาสีลมต้องใช้กาแฟ 10 หน่วย มีในสต็อก 3 หน่วย ลองให้ Agent ขอเบิกส่วนที่ขาดจากบางนา</p><button id="sample" type="button">ใช้คำสั่งตัวอย่าง</button></aside>
-        </div>
-        <section id="run-result" class="panel stack result" aria-live="polite" hidden>
-          <h2>ผลการตรวจสอบ</h2><p id="answer"></p><div id="run-approvals" class="actions"></div>
-          <details><summary>เครื่องมือที่ Agent เรียกใช้</summary><ul id="tool-list"></ul></details>
-        </section>
-      </section>
-      <section id="view-approvals" hidden>
-        <header><p class="eyebrow">ERP / POS WORKSPACE</p><h1>Approvals</h1><p>ติดตามคำขอ ตรวจสต็อก และดูผลหลังอนุมัติ</p></header>
-        <div class="grid split">
-          <div class="panel stack"><div class="bar"><h2>คำขอในระบบ</h2><button type="button" data-refresh="approvals">รีเฟรช</button></div><div id="queue" class="stack"></div></div>
-          <article id="approval-detail" class="panel stack"><p class="muted">เลือกรายการเพื่อดูรายละเอียด</p></article>
-        </div>
-      </section>
-      <section id="view-activity" hidden>
-        <header><p class="eyebrow">ERP / POS WORKSPACE</p><h1>Activity</h1><p>ตรวจว่าใครเป็นผู้ขอ ผู้อนุมัติ และระบบบันทึกผลอย่างไร</p></header>
-        <div class="panel stack"><div class="bar"><h2>Audit Log</h2><button type="button" data-refresh="activity">รีเฟรช</button></div>
-          <p id="audit-context" class="muted" hidden></p><div id="events" class="stack"></div></div>
-      </section>
-    </div>
-  </main>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="OpsPilot · ERP operations and human approval"
+    />
+    <meta name="theme-color" content="#101a2d" />
+    <title>OpsPilot — Operations workspace</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>

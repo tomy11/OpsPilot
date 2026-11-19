@@ -1,10 +1,12 @@
+import re
 from datetime import timedelta
 
 import httpx
+import pytest
 from temporalio.service import RPCError, RPCStatusCode
 
 from opspilot_agent.api.delivery import deliver_due
-from opspilot_agent.api.main import create_app
+from opspilot_agent.api.main import WEB_DIST, create_app
 from opspilot_agent.fake_llm import FakeLLM
 from opspilot_agent.models import ApprovalDelivery, ApprovalRequest
 from opspilot_core.db import utcnow
@@ -34,8 +36,6 @@ async def test_staging_auth_and_decision_is_persisted_before_retry(settings, erp
         app.router.lifespan_context(app),
         httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://agent") as api,
     ):
-        assert (await api.get("/")).status_code == 200
-        assert (await api.get("/assets/app.js")).status_code == 200
         assert (await api.get("/ready")).status_code == 200
         assert (
             await api.post(
@@ -81,6 +81,17 @@ async def test_staging_auth_and_decision_is_persisted_before_retry(settings, erp
         async with db.sessionmaker() as session:
             assert await session.get(ApprovalDelivery, approval["id"]) is None
         assert orchestrator.attempts == 2
+
+
+@pytest.mark.skipif(not (WEB_DIST / "index.html").is_file(), reason="frontend build not present")
+async def test_frontend_build_is_served(api):
+    response = await api.get("/")
+    assert response.status_code == 200
+    scripts = re.findall(r'src="(/assets/[^"]+\.js)"', response.text)
+    styles = re.findall(r'href="(/assets/[^"]+\.css)"', response.text)
+    assert scripts and styles
+    for path in scripts + styles:
+        assert (await api.get(path)).status_code == 200
 
 
 async def test_mock_sandbox_persists_write_and_idempotency_across_restart(tmp_path):

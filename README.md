@@ -83,7 +83,7 @@ Key design choices:
 | Permissions | `opspilot_agent/policy.py` — role check per tool, approver rules (no self-approval, same department) |
 | Tool input safety | Strict tool schemas + Pydantic validation before any call |
 | Exactly-once writes | Conditional status transitions in DB + ERP `Idempotency-Key` = approval id |
-| Long waits / crashes | Temporal waits up to 24h for a decision. Pending starts and committed decisions can be recovered from Postgres |
+| Long waits / crashes | Temporal waits up to 24h for a decision. Pending starts and committed decisions are an outbox in Postgres: retried with backoff, expired if no workflow could start in time, failed (and audited) if an approved workflow is gone |
 | Transient ERP failures | Client-side retry (tenacity) + Temporal activity retry; 4xx are permanent → `failed` |
 | Audit / PDPA | Every tool call, request, decision and execution is in `audit_logs`; PII masked |
 | Offline dev | `LLM_PROVIDER=fake` deterministic planner, `APPROVAL_BACKEND=inline` without Temporal |
@@ -241,6 +241,11 @@ docker compose up --build
 For the browser workspace with Staff and Manager logins, use
 [the staging Compose setup](deploy/README.md). It includes the HTTPS gateway and a repeatable
 smoke test for the approval flow.
+
+The Agent image builds the React workspace with Vite, Tailwind CSS, and shadcn/ui. For local
+UI development with the Agent API on port 8000, run `npm ci` and `npm run dev` in
+`apps/agent/src/opspilot_agent/web`. Set `AGENT_API_ORIGIN` to proxy a different API origin.
+To serve the built UI directly from local FastAPI, run `npm run build` before starting uvicorn.
 
 One `Dockerfile` builds any member: `docker build --build-arg PACKAGE=opspilot-knowledge .`
 installs only that package and its dependencies.

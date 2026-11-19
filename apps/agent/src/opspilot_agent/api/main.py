@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from opspilot_agent.api.delivery import run_delivery
 from opspilot_agent.api.deps import Services
+from opspilot_agent.api.login_limit import LoginLimiter
 from opspilot_agent.api.orchestrator import (
     ApprovalOrchestrator,
     InlineOrchestrator,
@@ -26,6 +27,8 @@ from opspilot_agent.tools import ToolContext
 from opspilot_core.api import CoreState, core_router
 from opspilot_core.db import Database
 from opspilot_core.llm import AnthropicLLM, LLMClient
+
+WEB_DIST = Path(__file__).resolve().parents[1] / "web" / "dist"
 
 
 def create_app(
@@ -82,7 +85,7 @@ def create_app(
         )
         app.state.services = Services(settings=s, db=db, tools=tools, llm=model, orchestrator=orch)
         delivery = (
-            asyncio.create_task(run_delivery(db, orch))
+            asyncio.create_task(run_delivery(db, orch, timeout_hours=s.approval_timeout_hours))
             if s.approval_backend == "temporal"
             else None
         )
@@ -98,17 +101,17 @@ def create_app(
             await db.dispose()
 
     app = FastAPI(title="OpsPilot Agent", version="0.1.0", lifespan=lifespan)
+    app.state.login_limiter = LoginLimiter(
+        per_ip=s.login_max_failures_per_ip,
+        per_user=s.login_max_failures_per_user,
+        window_s=s.login_window_s,
+    )
     app.include_router(core_router)
     app.include_router(agent.router)
     app.include_router(approvals.router)
     app.include_router(demo.router)
-    app.mount(
-        "/",
-        StaticFiles(
-            directory=Path(__file__).resolve().parents[1] / "web", html=True, check_dir=False
-        ),
-        name="web",
-    )
+    if (WEB_DIST / "index.html").is_file():
+        app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")
     return app
 
 

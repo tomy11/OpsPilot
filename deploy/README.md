@@ -59,6 +59,13 @@ For a loopback-only rehearsal, use `STAGING_SITE=http://localhost`, `STAGING_BIN
 
 ## Operations
 
+Failed sign-ins are throttled per client IP (5 per 15 minutes) and per account (20 per 15
+minutes), answering 429 with `Retry-After`. The counts live in the Agent process, which is why
+the staging setup runs one Agent replica, and the client IP comes from Caddy's
+`X-Forwarded-For` (`FORWARDED_ALLOW_IPS` is set because only the gateway reaches the Agent).
+Tune with `LOGIN_MAX_FAILURES_PER_IP`, `LOGIN_MAX_FAILURES_PER_USER` and `LOGIN_WINDOW_S`.
+
+
 Use `stage ps` and `stage logs --tail=100 agent worker temporal` when investigating. Keep the
 Postgres and ERP volumes when redeploying. Back them up before a release that changes their
 schema. To roll back a compatible release, set `STAGING_REVISION` to its retained image tag
