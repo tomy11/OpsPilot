@@ -75,6 +75,10 @@ async def test_transfer_needs_approval_then_executes(api, erp_app):
         "approval.executed",
         "approval.decide",
     } <= actions
+    assert (await api.get(f"/audit?target={approval['id']}", headers=other)).json() == []
+    assert (
+        await api.get(f"/approvals/{approval['id']}/inventory", headers=other)
+    ).status_code == 404
 
 
 async def test_rejection_does_not_touch_erp(api, erp_app):

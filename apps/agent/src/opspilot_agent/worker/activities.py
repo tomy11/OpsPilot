@@ -27,5 +27,5 @@ class ApprovalActivities:
         await approvals.mark_failed(self.db, approval_id, error)
 
     @activity.defn(name="approval.expire")
-    async def expire(self, approval_id: str) -> None:
-        await approvals.expire(self.db, approval_id)
+    async def expire(self, approval_id: str) -> str:
+        return await approvals.expire(self.db, approval_id)

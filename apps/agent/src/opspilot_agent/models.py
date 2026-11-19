@@ -4,7 +4,7 @@ import enum
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, Enum, String, Text
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from opspilot_core.db import Base, new_id, utcnow
@@ -53,3 +53,18 @@ class ApprovalRequest(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
+
+
+class ApprovalDelivery(Base):
+    __tablename__ = "approval_deliveries"
+
+    approval_id: Mapped[str] = mapped_column(ForeignKey("approval_requests.id"), primary_key=True)
+    next_attempt: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, index=True
+    )
+
+
+class RunSandbox(Base):
+    __tablename__ = "run_sandboxes"
+
+    run_id: Mapped[str] = mapped_column(ForeignKey("agent_runs.id"), primary_key=True)

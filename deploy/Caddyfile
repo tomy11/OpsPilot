@@ -1,0 +1,17 @@
+{$STAGING_SITE} {
+	encode gzip
+	header {
+		Content-Security-Policy "default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+		Referrer-Policy "no-referrer"
+		X-Content-Type-Options "nosniff"
+		Cache-Control "no-store"
+	}
+
+	@workspace path / /assets/* /session/login /session/me /agent/runs /approvals /approvals/* /audit /ready
+	handle @workspace {
+		reverse_proxy agent:8000
+	}
+	handle {
+		respond 404
+	}
+}

@@ -8,6 +8,8 @@ import logging
 from typing import Protocol
 
 from temporalio.client import Client
+from temporalio.common import WorkflowIDReusePolicy
+from temporalio.exceptions import WorkflowAlreadyStartedError
 
 from opspilot_agent import approvals
 from opspilot_agent.erp_client import ErpError
@@ -53,13 +55,18 @@ class TemporalOrchestrator:
         return f"approval-{approval_id}"
 
     async def start(self, approval_id: str) -> str | None:
-        handle = await self.client.start_workflow(
-            ApprovalWorkflow.run,
-            ApprovalInput(approval_id=approval_id, timeout_hours=self.timeout_hours),
-            id=self.workflow_id(approval_id),
-            task_queue=self.task_queue,
-        )
-        return handle.id
+        workflow_id = self.workflow_id(approval_id)
+        try:
+            await self.client.start_workflow(
+                ApprovalWorkflow.run,
+                ApprovalInput(approval_id=approval_id, timeout_hours=self.timeout_hours),
+                id=workflow_id,
+                id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,
+                task_queue=self.task_queue,
+            )
+        except WorkflowAlreadyStartedError:
+            pass  # An earlier start succeeded before the database commit.
+        return workflow_id
 
     async def decide(self, approval_id: str, signal: DecisionSignal) -> None:
         handle = self.client.get_workflow_handle(self.workflow_id(approval_id))

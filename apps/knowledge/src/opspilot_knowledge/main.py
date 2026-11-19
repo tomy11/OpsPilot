@@ -42,7 +42,7 @@ def create_app(
             )
         model = llm or (AnthropicLLM(s) if s.llm_provider == "anthropic" else FakeGroundedLLM())
 
-        app.state.core = CoreState(settings=s, db=db)
+        app.state.core = CoreState(settings=s, db=db, audit_department_prefix="knowledge.")
         app.state.knowledge = KnowledgeState(service=kb, llm=model)
         try:
             yield

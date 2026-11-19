@@ -1,0 +1,96 @@
+# Use with docker-compose.yml and a dedicated Compose project name.
+x-staging-env: &staging-env
+  APP_ENV: prod
+  JWT_SECRET: ${JWT_SECRET:?set a staging JWT_SECRET}
+  DATABASE_URL: postgresql+asyncpg://opspilot:${POSTGRES_PASSWORD:?set a URL-safe password}@postgres:5432/opspilot
+
+services:
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set a URL-safe password}
+    ports: !reset []
+    restart: unless-stopped
+
+  temporal:
+    environment:
+      POSTGRES_PWD: ${POSTGRES_PASSWORD:?set a URL-safe password}
+    ports: !reset []
+    restart: unless-stopped
+
+  temporal-ui:
+    profiles: ["operator"]
+    ports: !reset []
+
+  erp-mock:
+    image: opspilot-erp-mock:${STAGING_REVISION:-local}
+    environment:
+      ERP_STATE_PATH: /state/erp.db
+    volumes:
+      - erpstate:/state
+    ports: !reset []
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/health', timeout=2)"]
+      interval: 5s
+      retries: 12
+
+  knowledge:
+    image: opspilot-knowledge:${STAGING_REVISION:-local}
+    environment: *staging-env
+    ports: !reset []
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8200/ready', timeout=2)"]
+      interval: 5s
+      retries: 12
+
+  docflow:
+    image: opspilot-docflow:${STAGING_REVISION:-local}
+    environment: *staging-env
+    ports: !reset []
+    depends_on:
+      knowledge: { condition: service_healthy }
+      erp-mock: { condition: service_healthy }
+    restart: unless-stopped
+
+  agent:
+    image: opspilot-agent:${STAGING_REVISION:-local}
+    environment:
+      <<: *staging-env
+      ERP_ISOLATE_RUNS: "true"
+      DEMO_STAFF_PASSWORD: ${DEMO_STAFF_PASSWORD:?set a staff login password}
+      DEMO_MANAGER_PASSWORD: ${DEMO_MANAGER_PASSWORD:?set a distinct manager login password}
+    ports: !reset []
+    depends_on:
+      knowledge: { condition: service_healthy }
+      erp-mock: { condition: service_healthy }
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=2)"]
+      interval: 5s
+      retries: 12
+
+  worker:
+    image: opspilot-agent:${STAGING_REVISION:-local}
+    environment: *staging-env
+    depends_on:
+      agent: { condition: service_healthy }
+    restart: unless-stopped
+
+  gateway:
+    image: caddy:2-alpine
+    environment:
+      STAGING_SITE: ${STAGING_SITE:?set to a hostname for HTTPS or http://localhost for loopback testing}
+    ports:
+      - ${STAGING_BIND:-0.0.0.0}:${STAGING_HTTP_PORT:-80}:80
+      - ${STAGING_BIND:-0.0.0.0}:${STAGING_HTTPS_PORT:-443}:443
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+    depends_on:
+      agent: { condition: service_healthy }
+    restart: unless-stopped
+
+volumes:
+  erpstate:
+  caddydata:

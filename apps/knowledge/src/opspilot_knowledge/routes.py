@@ -84,6 +84,7 @@ async def ingest_document(
         status="created" if result.created else "unchanged",
         target=result.document.id,
         detail={
+            "department": user.department,
             "source": body.source,
             "version": result.document.version,
             "departments": result.document.departments,
@@ -121,7 +122,7 @@ async def deactivate_document(
         action="knowledge.document.deactivated",
         status="ok",
         target=document_id,
-        detail={"source": doc.source, "version": doc.version},
+        detail={"source": doc.source, "version": doc.version, "department": user.department},
     )
     await s.commit()
 
@@ -141,6 +142,7 @@ async def ask(body: AskIn, user: UserDep, kb: KnowledgeDep, s: SessionDep) -> As
         action="knowledge.ask",
         status="grounded" if result.grounded else (result.reason or "not_grounded"),
         detail={
+            "department": user.department,
             "question": body.question,
             "retrieved": [h.document_id for h in hits],
             "cited": [c.hit.document_id for c in result.citations],

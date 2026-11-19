@@ -60,16 +60,17 @@ class ApprovalWorkflow:
                 timeout=timedelta(hours=inp.timeout_hours),
             )
         except TimeoutError:  # asyncio.TimeoutError is an alias on Python 3.11+
-            await workflow.execute_activity_method(
+            status = await workflow.execute_activity_method(
                 ApprovalActivities.expire,
                 inp.approval_id,
                 start_to_close_timeout=timedelta(seconds=30),
             )
-            self._state = "expired"
-            return self._state
-
-        assert self._decision is not None
-        if not self._decision.approve:
+            if status != "approved":
+                self._state = "rejected" if status == "rejected" else "expired"
+                return self._state
+        else:
+            assert self._decision is not None
+        if self._decision is not None and not self._decision.approve:
             self._state = "rejected"
             return self._state
 

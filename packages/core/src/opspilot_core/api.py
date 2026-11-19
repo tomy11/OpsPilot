@@ -11,7 +11,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select
+from sqlalchemy import Select, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from opspilot_core.auth import AuthError, Role, User, decode_token, issue_token
@@ -23,6 +23,8 @@ from opspilot_core.db import AuditLog, Database
 class CoreState:
     settings: CoreSettings
     db: Database
+    audit_targets: tuple[tuple[Any, Any], ...] = ()
+    audit_department_prefix: str | None = None
 
 
 def core_state(request: Request) -> CoreState:
@@ -96,6 +98,12 @@ async def health() -> dict[str, bool]:
     return {"ok": True}
 
 
+@core_router.get("/ready")
+async def ready(s: SessionDep):
+    await s.execute(text("SELECT 1"))
+    return {"ok": True}
+
+
 @core_router.post("/auth/dev-token", response_model=TokenOut, tags=["auth"])
 async def dev_token(body: DevTokenIn, core: CoreDep) -> TokenOut:
     """Issue a token for any user/role. Disabled in prod; replace with a real IdP (OIDC)."""
@@ -108,12 +116,27 @@ async def dev_token(body: DevTokenIn, core: CoreDep) -> TokenOut:
 @core_router.get("/audit", response_model=list[AuditOut], tags=["audit"])
 async def list_audit(
     s: SessionDep,
-    _: Annotated[User, Depends(require_role(Role.MANAGER, Role.ADMIN))],
+    core: CoreDep,
+    user: Annotated[User, Depends(require_role(Role.MANAGER, Role.ADMIN))],
     target: str | None = None,
     action: str | None = None,
     limit: int = 100,
 ) -> list[AuditOut]:
-    q = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(min(limit, 500))
+    q: Select = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(max(1, min(limit, 500)))
+    if user.role is Role.MANAGER:
+        allowed = [
+            AuditLog.target.in_(select(id_column).where(department_column == user.department))
+            for id_column, department_column in core.audit_targets
+        ]
+        if core.audit_department_prefix:
+            allowed.append(
+                AuditLog.action.startswith(core.audit_department_prefix)
+                & (
+                    (AuditLog.detail["department"].as_string() == user.department)
+                    | (AuditLog.actor == user.id)
+                )
+            )
+        q = q.where(or_(*allowed) if allowed else AuditLog.actor == user.id)
     if target:
         q = q.where(AuditLog.target == target)
     if action:

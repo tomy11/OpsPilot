@@ -22,17 +22,39 @@ RUN=$(curl -sf "$API/agent/runs" -H "authorization: Bearer $STAFF" -H 'content-t
   -d '{"message":"เช็ค ORD-1001 ว่าของพอไหม ถ้าไม่พอให้โอนสต็อกจาก bangna"}')
 echo "$RUN" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d["answer"]);[print(" -",a["id"],a["status"],a["summary"]) for a in d["approvals"]]'
 AID=$(echo "$RUN" | python3 -c 'import sys,json;print(json.load(sys.stdin)["approvals"][0]["id"])')
+BACKEND=$(curl -sf "$API/session/me" -H "authorization: Bearer $STAFF" |
+  python3 -c 'import sys,json;print(json.load(sys.stdin)["approval_backend"])')
+get_approval() { curl -sf "$API/approvals/$AID" -H "authorization: Bearer $MANAGER"; }
+wait_approval() {
+  local field=$1 value=$2 row attempt
+  for ((attempt=0; attempt<40; attempt++)); do
+    row=$(get_approval)
+    if printf '%s' "$row" | python3 -c 'import sys,json; d=json.load(sys.stdin); sys.exit(not (d.get(sys.argv[1]) == sys.argv[2] or (sys.argv[2] == "*" and d.get(sys.argv[1]))))' "$field" "$value"; then
+      printf '%s\n' "$row"
+      return
+    fi
+    if printf '%s' "$row" | python3 -c 'import sys,json; sys.exit(json.load(sys.stdin)["status"] not in ("failed", "expired", "rejected"))'; then
+      printf 'Approval reached a terminal failure: %s\n' "$row" >&2
+      return 1
+    fi
+    sleep 1
+  done
+  printf 'Timed out waiting for approval %s (%s)\n' "$AID" "$field" >&2
+  return 1
+}
 
 echo "== 2. staff tries to approve own request (expect 403)"
 curl -s -o /dev/null -w '%{http_code}\n' "$API/approvals/$AID/decision" \
   -H "authorization: Bearer $STAFF" -H 'content-type: application/json' -d '{"approve":true}'
 
 echo "== 3. manager approves"
+if [[ "$BACKEND" == temporal ]]; then wait_approval workflow_id '*' > /dev/null; fi
 curl -sf "$API/approvals/$AID/decision" -H "authorization: Bearer $MANAGER" \
-  -H 'content-type: application/json' -d '{"approve":true,"reason":"ok"}' |
-  python3 -c 'import sys,json;d=json.load(sys.stdin);print(d["status"], d["result"] or d["error"] or "")'
+  -H 'content-type: application/json' -d '{"approve":true,"reason":"ok"}' > /dev/null
+wait_approval status executed |
+  python3 -c 'import sys,json;d=json.load(sys.stdin);print(d["status"], d["result"])'
 
-echo "== 4. stock after (Temporal backend executes asynchronously; re-run if still pending)"
+echo "== 4. stock after execution"
 curl -sf "$ERP/inventory?sku=SKU-COFFEE"; echo
 
 echo "== 5. audit trail"

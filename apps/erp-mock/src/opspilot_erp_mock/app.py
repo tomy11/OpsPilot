@@ -6,9 +6,14 @@ In-memory orders, inventory, vendors, purchase orders and AP invoices, Idempoten
 
 import asyncio
 import copy
+import json
 import os
 import random
+import re
+import sqlite3
 import uuid
+from contextlib import closing
+from contextvars import ContextVar
 from typing import Literal
 
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -131,11 +136,70 @@ class Store:
         self.idempotency: dict[str, dict] = {}
         self.write_count = 0
 
+    def dump(self) -> str:
+        return json.dumps(
+            vars(self) | {"inventory": [[b, s, q] for (b, s), q in self.inventory.items()]}
+        )
 
-def create_app(error_rate: float | None = None, latency_ms: int | None = None) -> FastAPI:
+    @classmethod
+    def load(cls, payload: str) -> "Store":
+        fields = json.loads(payload)
+        fields["inventory"] = {(b, s): q for b, s, q in fields["inventory"]}
+        store = cls()
+        vars(store).update(fields)
+        return store
+
+
+def create_app(
+    error_rate: float | None = None, latency_ms: int | None = None, *, state_path: str = ""
+) -> FastAPI:
     app = FastAPI(title="Mock ERP/POS")
     store = Store()
     app.state.store = store
+    active_store: ContextVar[Store] = ContextVar("erp_store", default=store)
+    if state_path:
+        with closing(sqlite3.connect(state_path)) as db, db:
+            db.execute("PRAGMA journal_mode=WAL")
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS erp_state (scope TEXT PRIMARY KEY, payload TEXT)"
+            )
+        write_lock = asyncio.Lock()
+
+        @app.middleware("http")
+        async def persisted_scope(request: Request, call_next):
+            if request.url.path == "/health":
+                return await call_next(request)
+            scope = request.headers.get("X-OpsPilot-Sandbox", "")
+            if scope and not re.fullmatch(r"[a-f0-9]{32}", scope):
+                return JSONResponse({"detail": "invalid sandbox"}, status_code=400)
+            write = request.method not in ("GET", "HEAD", "OPTIONS")
+
+            async def respond():
+                with closing(sqlite3.connect(state_path)) as db, db:
+                    if write:
+                        db.execute("BEGIN IMMEDIATE")
+                    row = db.execute(
+                        "SELECT payload FROM erp_state WHERE scope = ?", (scope,)
+                    ).fetchone()
+                    state = Store.load(row[0]) if row else Store()
+                    token = active_store.set(state)
+                    try:
+                        response = await call_next(request)
+                        if write and response.status_code < 400:
+                            db.execute(
+                                "INSERT INTO erp_state VALUES (?, ?) ON CONFLICT(scope) "
+                                "DO UPDATE SET payload = excluded.payload",
+                                (scope, state.dump()),
+                            )
+                        return response
+                    finally:
+                        active_store.reset(token)
+
+            if write:
+                async with write_lock:
+                    return await respond()
+            return await respond()
+
     app.state.error_rate = (
         error_rate if error_rate is not None else float(os.getenv("CHAOS_ERROR_RATE", "0"))
     )
@@ -154,11 +218,11 @@ def create_app(error_rate: float | None = None, latency_ms: int | None = None) -
         return await call_next(request)
 
     def replay(key: str | None, scope: str) -> dict | None:
-        return store.idempotency.get(f"{scope}:{key}") if key else None
+        return active_store.get().idempotency.get(f"{scope}:{key}") if key else None
 
     def remember(key: str | None, scope: str, body: dict) -> None:
         if key:
-            store.idempotency[f"{scope}:{key}"] = body
+            active_store.get().idempotency[f"{scope}:{key}"] = body
 
     @app.get("/health")
     async def health():
@@ -166,6 +230,7 @@ def create_app(error_rate: float | None = None, latency_ms: int | None = None) -
 
     @app.get("/orders/{order_id}")
     async def get_order(order_id: str):
+        store = active_store.get()
         order = store.orders.get(order_id)
         if not order:
             raise HTTPException(404, f"order {order_id} not found")
@@ -173,6 +238,7 @@ def create_app(error_rate: float | None = None, latency_ms: int | None = None) -
 
     @app.get("/inventory")
     async def get_inventory(sku: str, branch: str | None = None):
+        store = active_store.get()
         rows = [
             {"branch": b, "sku": s, "on_hand": q}
             for (b, s), q in store.inventory.items()
@@ -186,6 +252,7 @@ def create_app(error_rate: float | None = None, latency_ms: int | None = None) -
     async def create_transfer(
         body: StockTransferIn, idempotency_key: str | None = Header(default=None)
     ):
+        store = active_store.get()
         if cached := replay(idempotency_key, "transfer"):
             return cached
         if body.from_branch == body.to_branch:
@@ -206,6 +273,7 @@ def create_app(error_rate: float | None = None, latency_ms: int | None = None) -
     async def patch_order(
         order_id: str, body: OrderPatchIn, idempotency_key: str | None = Header(default=None)
     ):
+        store = active_store.get()
         if cached := replay(idempotency_key, f"order:{order_id}"):
             return cached
         order = store.orders.get(order_id)
@@ -225,6 +293,7 @@ def create_app(error_rate: float | None = None, latency_ms: int | None = None) -
     async def adjust_inventory(
         body: InventoryAdjustIn, idempotency_key: str | None = Header(default=None)
     ):
+        store = active_store.get()
         if cached := replay(idempotency_key, "adjust"):
             return cached
         key = (body.branch, body.sku)
@@ -239,6 +308,7 @@ def create_app(error_rate: float | None = None, latency_ms: int | None = None) -
 
     @app.get("/vendors/{tax_id}")
     async def get_vendor(tax_id: str):
+        store = active_store.get()
         vendor = store.vendors.get(tax_id)
         if not vendor:
             raise HTTPException(404, f"vendor {tax_id} not found")
@@ -246,6 +316,7 @@ def create_app(error_rate: float | None = None, latency_ms: int | None = None) -
 
     @app.get("/purchase-orders/{po_id}")
     async def get_purchase_order(po_id: str):
+        store = active_store.get()
         po = store.purchase_orders.get(po_id)
         if not po:
             raise HTTPException(404, f"purchase order {po_id} not found")
@@ -253,6 +324,7 @@ def create_app(error_rate: float | None = None, latency_ms: int | None = None) -
 
     @app.get("/ap-invoices")
     async def find_ap_invoices(vendor_tax_id: str, invoice_number: str):
+        store = active_store.get()
         return [
             i
             for i in store.ap_invoices
@@ -263,6 +335,7 @@ def create_app(error_rate: float | None = None, latency_ms: int | None = None) -
     async def create_ap_invoice(
         body: ApInvoiceIn, idempotency_key: str | None = Header(default=None)
     ):
+        store = active_store.get()
         if cached := replay(idempotency_key, "ap-invoice"):
             return cached
         if body.vendor_tax_id not in store.vendors:
@@ -282,10 +355,10 @@ def create_app(error_rate: float | None = None, latency_ms: int | None = None) -
 
     @app.post("/_admin/reset")
     async def reset():
-        store.reset()
+        active_store.get().reset()
         return {"ok": True}
 
     return app
 
 
-app = create_app()
+app = create_app(state_path=os.getenv("ERP_STATE_PATH", ""))

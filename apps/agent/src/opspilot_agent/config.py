@@ -1,12 +1,17 @@
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import SecretStr
+
 from opspilot_core.config import CoreSettings
 
 
 class AgentSettings(CoreSettings):
     erp_base_url: str = "http://localhost:8100"
     erp_timeout_s: float = 5.0
+    erp_isolate_runs: bool = False
+    demo_staff_password: SecretStr = SecretStr("")
+    demo_manager_password: SecretStr = SecretStr("")
 
     knowledge_base_url: str = "http://localhost:8200"
     knowledge_timeout_s: float = 10.0

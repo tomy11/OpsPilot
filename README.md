@@ -48,6 +48,7 @@ sequenceDiagram
     participant LLM as Claude (Messages API)
     participant Policy
     participant DB as Postgres
+    participant Delivery as Approval delivery
     participant WF as Temporal ApprovalWorkflow
     participant ERP as ERP/POS
 
@@ -65,11 +66,11 @@ sequenceDiagram
             Agent-->>LLM: tool_result is_error "permission denied"
         end
     end
-    API->>WF: start approval-{id}
+    Delivery->>WF: start approval-{id} from pending row
     Manager->>API: POST /approvals/{id}/decision
     API->>Policy: can_decide (manager, same dept, not requester)
-    API->>DB: pending -> approved (conditional update, 409 on double click)
-    API->>WF: signal decide
+    API->>DB: commit approved + decision to deliver (409 on double click)
+    Delivery->>WF: signal decide (retry until delivered)
     WF->>ERP: execute with Idempotency-Key = approval id (retry w/ backoff)
     WF->>DB: executed / failed / expired + audit log
 ```
@@ -82,7 +83,7 @@ Key design choices:
 | Permissions | `opspilot_agent/policy.py` — role check per tool, approver rules (no self-approval, same department) |
 | Tool input safety | Strict tool schemas + Pydantic validation before any call |
 | Exactly-once writes | Conditional status transitions in DB + ERP `Idempotency-Key` = approval id |
-| Long waits / crashes | Temporal workflow waits up to 24h for a decision, survives restarts, expires otherwise |
+| Long waits / crashes | Temporal waits up to 24h for a decision. Pending starts and committed decisions can be recovered from Postgres |
 | Transient ERP failures | Client-side retry (tenacity) + Temporal activity retry; 4xx are permanent → `failed` |
 | Audit / PDPA | Every tool call, request, decision and execution is in `audit_logs`; PII masked |
 | Offline dev | `LLM_PROVIDER=fake` deterministic planner, `APPROVAL_BACKEND=inline` without Temporal |
@@ -236,6 +237,10 @@ Full stack (Postgres + Temporal + worker + all services):
 docker compose up --build
 ./scripts/demo.sh            # Temporal UI: http://localhost:8233
 ```
+
+For the browser workspace with Staff and Manager logins, use
+[the staging Compose setup](deploy/README.md). It includes the HTTPS gateway and a repeatable
+smoke test for the approval flow.
 
 One `Dockerfile` builds any member: `docker build --build-arg PACKAGE=opspilot-knowledge .`
 installs only that package and its dependencies.

@@ -14,7 +14,7 @@ from temporalio.worker import Worker
 from opspilot_agent.worker.workflows import ApprovalInput, ApprovalWorkflow, DecisionSignal
 
 calls: list[tuple[str, str]] = []
-fail_mode = {"transient": 0, "permanent": False}
+fail_mode = {"transient": 0, "permanent": False, "on_expiry": "expired"}
 
 
 @activity.defn(name="approval.execute")
@@ -34,8 +34,9 @@ async def fake_mark_failed(approval_id: str, error: str) -> None:
 
 
 @activity.defn(name="approval.expire")
-async def fake_expire(approval_id: str) -> None:
+async def fake_expire(approval_id: str) -> str:
     calls.append(("expire", approval_id))
+    return str(fail_mode["on_expiry"])
 
 
 @pytest.fixture
@@ -51,7 +52,7 @@ async def env():
 @pytest.fixture(autouse=True)
 def reset():
     calls.clear()
-    fail_mode.update(transient=0, permanent=False)
+    fail_mode.update(transient=0, permanent=False, on_expiry="expired")
 
 
 async def _run(env, signal: DecisionSignal | None, timeout_hours: int = 24) -> str:
@@ -99,3 +100,9 @@ async def test_rejected_does_nothing(env):
 async def test_no_decision_expires(env):
     assert await _run(env, None, timeout_hours=1) == "expired"
     assert calls == [("expire", "a1")]
+
+
+async def test_persisted_decision_survives_delayed_signal(env):
+    fail_mode["on_expiry"] = "approved"
+    assert await _run(env, None, timeout_hours=1) == "executed"
+    assert calls == [("expire", "a1"), ("execute", "a1")]

@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Any
 
 import httpx
@@ -40,11 +42,22 @@ class ErpClient:
     ) -> None:
         self._http = httpx.AsyncClient(base_url=base_url, timeout=timeout_s, transport=transport)
         self._max_attempts = max_attempts
+        self._sandbox: ContextVar[str | None] = ContextVar("erp_sandbox", default=None)
+
+    @contextmanager
+    def sandbox(self, run_id: str | None):
+        token = self._sandbox.set(run_id)
+        try:
+            yield
+        finally:
+            self._sandbox.reset(token)
 
     async def aclose(self) -> None:
         await self._http.aclose()
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        if run_id := self._sandbox.get():
+            kwargs["headers"] = kwargs.get("headers", {}) | {"X-OpsPilot-Sandbox": run_id}
         async for attempt in AsyncRetrying(
             stop=stop_after_attempt(self._max_attempts),
             wait=wait_exponential_jitter(multiplier=0.05, max=2),

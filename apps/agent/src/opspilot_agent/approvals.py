@@ -10,7 +10,7 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from opspilot_agent.erp_client import ErpError
-from opspilot_agent.models import ApprovalRequest, ApprovalStatus
+from opspilot_agent.models import ApprovalRequest, ApprovalStatus, RunSandbox
 from opspilot_agent.tools import ToolContext, execute_write
 from opspilot_core.audit import record_audit
 from opspilot_core.db import Database
@@ -54,7 +54,9 @@ async def execute_approved(db: Database, ctx: ToolContext, approval_id: str) -> 
 
         try:
             # The approval id doubles as the ERP idempotency key.
-            result = await execute_write(ctx, approval.tool, approval.args, approval.id)
+            sandbox = await s.get(RunSandbox, approval.run_id)
+            with ctx.erp.sandbox(sandbox.run_id if sandbox else None):
+                result = await execute_write(ctx, approval.tool, approval.args, approval.id)
         except ErpError as exc:
             if exc.retryable:
                 raise
@@ -103,15 +105,17 @@ async def mark_failed(db: Database, approval_id: str, error: str) -> None:
         await s.commit()
 
 
-async def expire(db: Database, approval_id: str) -> None:
+async def expire(db: Database, approval_id: str) -> str:
     async with db.sessionmaker() as s:
         try:
             await transition(
                 s, approval_id, expected=ApprovalStatus.PENDING, new=ApprovalStatus.EXPIRED
             )
         except ApprovalConflict:
-            return
+            approval = await s.get(ApprovalRequest, approval_id)
+            return approval.status.value if approval is not None else "expired"
         await record_audit(
             s, actor="system", action="approval.expired", status="ok", target=approval_id
         )
         await s.commit()
+        return "expired"
