@@ -267,6 +267,28 @@ uv run python apps/docflow/evals/docflow_eval.py
 
 ## Next
 
+### Staging milestones
+
+Finish and verify all three modules on staging with `erp-mock` before starting Mini-ERP.
+
+| Milestone | Staging acceptance |
+|---|---|
+| A — Knowledge | Ask an SOP question in the web workspace, open its citation, and verify that another department cannot retrieve restricted content. |
+| B — Agent | Run the order and stock-transfer flow as Staff and Manager. Verify approval, a single ERP write after retry, and the audit trail. |
+| C — DocFlow | Upload and review an invoice in the web workspace. Verify validation, approval, and posting to ERP without a duplicate invoice. |
+
+### Mini-ERP after A–C
+
+1. Build **Orders and Inventory** as a separate FastAPI service backed by PostgreSQL with
+   migrations. Keep the HTTP contracts used by Agent and DocFlow. Make stock transfers
+   transactional and persist idempotency keys with their results.
+2. Add **Purchasing and AP Invoices**, including vendors, purchase orders, and duplicate
+   checks at the database level. Verify the DocFlow approval and posting flow.
+3. Verify both backends on staging before switching Agent, its worker, and DocFlow to
+   Mini-ERP together. Keep `erp-mock` for local demos and failure simulations.
+
+### Engineering backlog
+
 - Agent eval set (30–50 scenarios): tool-selection accuracy, task success, unauthorized-action rate
 - Langfuse tracing on LLM calls and tool steps
 - Alembic migrations instead of `create_all`
