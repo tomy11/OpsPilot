@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Loading } from "@/components/feedback";
 import { Workspace } from "@/components/workspace";
@@ -57,9 +57,9 @@ export function App() {
 function SignedIn({ token, user, logout }) {
   const [page, setPage] = useState("agent");
   const [message, setMessage] = useState("");
-  const [run, setRun] = useState(null);
+  const [turns, setTurns] = useState([]);
   const [busy, setBusy] = useState(false);
-  const [agentError, setAgentError] = useState("");
+  const nextTurn = useRef(0);
   const [approval, setApproval] = useState(null);
   const [auditTarget, setAuditTarget] = useState(null);
 
@@ -76,23 +76,57 @@ function SignedIn({ token, user, logout }) {
     [token, logout],
   );
 
-  async function runAgent(event) {
-    event.preventDefault();
-    if (busy || !message.trim()) return;
+  function runAgent() {
+    const prompt = message.trim();
+    if (busy || !prompt) return;
+    const id = nextTurn.current++;
+    setMessage("");
+    setTurns((current) => [...current, { id, prompt }]);
+    send(id, prompt);
+  }
+
+  // A failed turn keeps its prompt, so the user can resend it or pull it back to edit.
+  function retryTurn(id) {
+    const turn = turns.find((item) => item.id === id);
+    if (busy || !turn?.error) return;
+    setTurns((current) =>
+      current.map((item) => (item.id === id ? { id, prompt: item.prompt } : item)),
+    );
+    send(id, turn.prompt);
+  }
+
+  function editTurn(id) {
+    const turn = turns.find((item) => item.id === id);
+    if (busy || !turn?.error) return;
+    setTurns((current) => current.filter((item) => item.id !== id));
+    setMessage(turn.prompt);
+  }
+
+  async function send(id, prompt) {
     setBusy(true);
-    setAgentError("");
     try {
-      setRun(
-        await api("/agent/runs", {
-          method: "POST",
-          body: { message: message.trim() },
-        }),
+      const run = await api("/agent/runs", {
+        method: "POST",
+        body: { message: prompt },
+      });
+      setTurns((current) =>
+        current.map((turn) => (turn.id === id ? { ...turn, run } : turn)),
       );
     } catch (error) {
-      setAgentError(error.message);
+      setTurns((current) =>
+        current.map((turn) =>
+          turn.id === id ? { ...turn, error: error.message } : turn,
+        ),
+      );
     } finally {
       setBusy(false);
     }
+  }
+
+  function resetChat() {
+    if (busy) return;
+    setTurns([]);
+    setMessage("");
   }
 
   function navigate(next) {
@@ -107,9 +141,11 @@ function SignedIn({ token, user, logout }) {
           message={message}
           setMessage={setMessage}
           onRun={runAgent}
+          onReset={resetChat}
+          onRetry={retryTurn}
+          onEdit={editTurn}
           busy={busy}
-          run={run}
-          error={agentError}
+          turns={turns}
           openApproval={(id) => {
             setApproval(id);
             setPage("approvals");

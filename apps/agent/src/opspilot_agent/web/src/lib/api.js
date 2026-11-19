@@ -13,12 +13,19 @@ export async function request(
   if (token) headers.Authorization = "Bearer " + token;
   if (body !== undefined) headers["Content-Type"] = "application/json";
 
-  const response = await fetch(path, {
-    method,
-    headers,
-    signal,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  let response;
+  try {
+    response = await fetch(path, {
+      method,
+      headers,
+      signal,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch (error) {
+    if (error.name === "AbortError") throw error;
+    // fetch only rejects when the request never got an answer (offline, server down).
+    throw new ApiError(0, "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจการเชื่อมต่อแล้วลองอีกครั้ง");
+  }
   const data = await response.json().catch(() => null);
   if (!response.ok) {
     const message =

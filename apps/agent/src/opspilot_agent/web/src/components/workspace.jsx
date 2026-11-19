@@ -39,9 +39,16 @@ export function Workspace({ user, page, onNavigate, onLogout, children }) {
   const role = { staff: "Staff", manager: "Manager", admin: "Admin" }[
     user.role
   ];
+  const isChat = page === "agent";
 
   return (
-    <div className="min-h-dvh lg:grid lg:grid-cols-[15rem_minmax(0,1fr)]">
+    <div
+      className={cn(
+        "min-h-dvh lg:grid lg:grid-cols-[15rem_minmax(0,1fr)]",
+        isChat &&
+          "grid h-dvh grid-rows-[auto_minmax(0,1fr)] overflow-hidden lg:grid-rows-1",
+      )}
+    >
       <aside className="flex flex-col gap-4 bg-sidebar px-4 py-4 text-sidebar-foreground sm:px-6 lg:sticky lg:top-0 lg:h-dvh lg:gap-8 lg:px-5 lg:py-7">
         <div className="flex items-center justify-between gap-3 lg:block">
           <Brand light />
@@ -96,8 +103,8 @@ export function Workspace({ user, page, onNavigate, onLogout, children }) {
           </div>
         </div>
       </aside>
-      <main className="min-w-0">
-        <div className="border-b bg-card px-5 py-3.5 sm:px-8">
+      <main className={cn("min-w-0", isChat && "flex min-h-0 flex-col")}>
+        <div className="shrink-0 border-b bg-card px-5 py-3.5 sm:px-8">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-2">
             <span className="text-sm font-semibold text-muted-foreground">
               ERP / POS Workspace
@@ -107,9 +114,13 @@ export function Workspace({ user, page, onNavigate, onLogout, children }) {
             </Badge>
           </div>
         </div>
-        <div className="mx-auto max-w-6xl space-y-6 px-5 py-8 sm:px-8 sm:py-10">
-          {children}
-        </div>
+        {isChat ? (
+          children
+        ) : (
+          <div className="mx-auto max-w-6xl space-y-6 px-5 py-8 sm:px-8 sm:py-10">
+            {children}
+          </div>
+        )}
       </main>
     </div>
   );
