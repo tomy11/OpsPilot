@@ -9,8 +9,9 @@ from typing import Any
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from opspilot_agent.conversations import erp_scope
 from opspilot_agent.erp_client import ErpError
-from opspilot_agent.models import ApprovalRequest, ApprovalStatus, RunSandbox
+from opspilot_agent.models import ApprovalRequest, ApprovalStatus
 from opspilot_agent.tools import ToolContext, execute_write
 from opspilot_core.audit import record_audit
 from opspilot_core.db import Database
@@ -54,8 +55,8 @@ async def execute_approved(db: Database, ctx: ToolContext, approval_id: str) -> 
 
         try:
             # The approval id doubles as the ERP idempotency key.
-            sandbox = await s.get(RunSandbox, approval.run_id)
-            with ctx.erp.sandbox(sandbox.run_id if sandbox else None):
+            scope = await erp_scope(s, approval.run_id)
+            with ctx.erp.sandbox(scope):
                 result = await execute_write(ctx, approval.tool, approval.args, approval.id)
         except ErpError as exc:
             if exc.retryable:

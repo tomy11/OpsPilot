@@ -147,3 +147,24 @@ class CreditMonth(Base):
 
     month: Mapped[str] = mapped_column(String(7), primary_key=True)  # YYYY-MM, Bangkok time
     committed_micro: Mapped[int] = mapped_column(BigInteger, default=0)
+
+
+# ---- chat memory --------------------------------------------------------------------------------
+
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    title: Mapped[str] = mapped_column(String(80))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Hidden and no longer continued. The rows stay: pending requests still need their ERP scope.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ConversationRun(Base):
+    __tablename__ = "conversation_runs"
+
+    run_id: Mapped[str] = mapped_column(ForeignKey("agent_runs.id"), primary_key=True)
+    conversation_id: Mapped[str] = mapped_column(ForeignKey("conversations.id"), index=True)

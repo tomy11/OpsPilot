@@ -16,11 +16,15 @@ _ids = itertools.count(1)
 BRANCHES = ("silom", "bangna", "ladprao")
 
 
-def _first_user_text(messages: list[dict[str, Any]]) -> str:
-    for m in messages:
-        if m["role"] == "user" and isinstance(m["content"], str):
-            return m["content"]
-    return ""
+def _user_texts(messages: list[dict[str, Any]]) -> list[str]:
+    """What the user typed, oldest first (the automatic check is not the user)."""
+    return [
+        m["content"]
+        for m in messages
+        if m["role"] == "user"
+        and isinstance(m["content"], str)
+        and not m["content"].startswith("[Automatic check]")
+    ]
 
 
 def _history(messages: list[dict[str, Any]]) -> tuple[list[dict], dict[str, dict]]:
@@ -43,7 +47,8 @@ class FakeLLM:
     async def respond(
         self, *, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
     ) -> LLMTurn:
-        text = _first_user_text(messages)
+        texts = _user_texts(messages)
+        text = texts[-1] if texts else ""
         low = text.lower()
         calls, results = _history(messages)
         called = {c["name"] for c in calls}
@@ -56,6 +61,10 @@ class FakeLLM:
             ]
 
         order_m = re.search(r"ORD-\d+", text, re.I)
+        if order_m is None and re.search(r"นั้น|เดิม|เมื่อกี้|\b(?:that|it|same)\b", low):
+            # A follow-up: take the order from the latest earlier message that names one.
+            earlier = (re.search(r"ORD-\d+", t, re.I) for t in reversed(texts[:-1]))
+            order_m = next((m for m in earlier if m), None)
         order_id = order_m.group(0).upper() if order_m else None
         wants_transfer = bool(re.search(r"โอน|ย้าย|transfer", low))
         wants_cancel = bool(re.search(r"ยกเลิก|cancel", low))

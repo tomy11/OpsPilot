@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => {
     server: {
       proxy: {
         ...Object.fromEntries(
-          ["/session", "/agent/runs", "/approvals", "/audit"].map((path) => [
+          ["/session", "/agent/runs", "/agent/conversations", "/approvals", "/audit"].map((path) => [
             path,
             backend,
           ]),

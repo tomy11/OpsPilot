@@ -19,6 +19,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { HistoryButton } from "@/features/history";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -45,6 +46,10 @@ export function AgentPage({
   onRetry,
   onEdit,
   busy,
+  api,
+  chat,
+  openChat,
+  onDeleted,
   credits,
   turns,
   openApproval,
@@ -102,12 +107,23 @@ export function AgentPage({
         <div className="flex items-center gap-3">
           {credits !== null && credits !== undefined && (
             <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <Coins className="size-4" aria-hidden="true" /> เครดิต{" "}
+              <Coins className="size-4" aria-hidden="true" />{" "}
+              <span className="sr-only sm:not-sr-only">เครดิต</span>{" "}
               <span className="font-semibold tabular-nums text-foreground">
                 {credits.toLocaleString("th-TH")}
               </span>
             </span>
           )}
+        <HistoryButton
+          api={api}
+          disabled={busy}
+          current={chat}
+          onOpen={(id) => {
+            follow.current = true;
+            return openChat(id);
+          }}
+          onDeleted={onDeleted}
+        />
         <Button
           type="button"
           variant="outline"
@@ -118,7 +134,8 @@ export function AgentPage({
             prompt.current?.focus({ preventScroll: true });
           }}
         >
-          <Plus aria-hidden="true" /> แชตใหม่
+          <Plus aria-hidden="true" />{" "}
+          <span className="sr-only sm:not-sr-only">แชตใหม่</span>
         </Button>
         </div>
       </header>
@@ -224,7 +241,7 @@ export function AgentPage({
             <span className="hidden sm:inline">
               Enter เพื่อส่ง · Shift + Enter เพื่อขึ้นบรรทัดใหม่ ·{" "}
             </span>
-            แต่ละข้อความเริ่มการตรวจสอบแยกกัน
+            Agent จำข้อความในแชตนี้ เปลี่ยนเรื่องให้เริ่มแชตใหม่
           </p>
         </form>
       </div>

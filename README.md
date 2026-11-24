@@ -84,6 +84,7 @@ Key design choices:
 |---|---|
 | LLM never writes directly | Write tools become `ApprovalRequest` rows; only the workflow executes them |
 | Permissions | `opspilot_agent/policy.py` — role check per tool, approver rules (no self-approval, same department) |
+| Chat memory | Earlier questions and answers within a fixed budget; never old tool results. Status of earlier requests is read from the database each turn; an identical pending request is reused. ERP sandbox data is per chat |
 | Answers match reality | If an answer touches on requests or approvals but this run created none, the model must call the tool or rewrite it once; a claim that remains gets a system notice. The UI states when a message created no request |
 | Tool input safety | Strict tool schemas + Pydantic validation before any call |
 | Exactly-once writes | Conditional status transitions in DB + ERP `Idempotency-Key` = approval id |

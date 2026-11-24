@@ -7,7 +7,7 @@
 		Cache-Control "no-store"
 	}
 
-	@workspace path / /assets/* /session/login /session/me /session/redeem /session/refresh /session/logout /agent/runs /approvals /approvals/* /audit /ready
+	@workspace path / /assets/* /session/login /session/me /session/redeem /session/refresh /session/logout /agent/runs /agent/conversations /agent/conversations/* /approvals /approvals/* /audit /ready
 	handle @workspace {
 		reverse_proxy agent:8000
 	}

@@ -11,6 +11,7 @@ import { Login } from "@/features/login";
 import { request } from "@/lib/api";
 
 const tokenKey = "opspilot-token";
+const chatKey = "opspilot-chat"; // the open chat, so a refresh brings it back
 
 // Read once, then drop it from the address bar and history.
 function takeInvite() {
@@ -52,6 +53,7 @@ export function App() {
 
   const logout = useCallback(() => {
     sessionStorage.removeItem(tokenKey);
+    sessionStorage.removeItem(chatKey);
     setSession(null);
     // Ends the invite session too, if this browser has one.
     request("/session/logout", { method: "POST" }).catch(() => {});
@@ -123,6 +125,8 @@ function SignedIn({ token, user, logout }) {
   const [turns, setTurns] = useState([]);
   const [busy, setBusy] = useState(false);
   const nextTurn = useRef(0);
+  const [chat, setChat] = useState(null);
+  const [restoring, setRestoring] = useState(false);
   const [approval, setApproval] = useState(null);
   const [auditTarget, setAuditTarget] = useState(null);
 
@@ -160,6 +164,41 @@ function SignedIn({ token, user, logout }) {
     [user.invited, logout],
   );
 
+  const openChat = useCallback(
+    async (id, signal) => {
+      const { turns: saved } = await api("/agent/conversations/" + id, {
+        signal,
+      });
+      setTurns(saved.map((turn) => ({ id: nextTurn.current++, ...turn })));
+      setChat(id);
+      setMessage("");
+    },
+    [api],
+  );
+
+  useEffect(() => {
+    const saved = JSON.parse(sessionStorage.getItem(chatKey) ?? "null");
+    if (saved?.user !== user.id) return;
+    const controller = new AbortController();
+    setRestoring(true);
+    openChat(saved.chat, controller.signal)
+      .catch(() => {
+        if (!controller.signal.aborted) sessionStorage.removeItem(chatKey);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setRestoring(false);
+      });
+    return () => controller.abort();
+  }, [openChat, user.id]);
+
+  useEffect(() => {
+    if (chat)
+      sessionStorage.setItem(
+        chatKey,
+        JSON.stringify({ user: user.id, chat }),
+      );
+  }, [chat, user.id]);
+
   function runAgent() {
     const prompt = message.trim();
     if (busy || !prompt) return;
@@ -193,13 +232,16 @@ function SignedIn({ token, user, logout }) {
     try {
       const run = await api("/agent/runs", {
         method: "POST",
-        body: { message: prompt },
+        body: { message: prompt, conversation_id: chat },
       });
+      setChat(run.conversation_id);
       if (run.credits) setCredits(run.credits.balance);
       setTurns((current) =>
         current.map((turn) => (turn.id === id ? { ...turn, run } : turn)),
       );
     } catch (error) {
+      // Deleted in another tab: the next attempt starts a new chat.
+      if (error.status === 404) forgetChat();
       setTurns((current) =>
         current.map((turn) =>
           turn.id === id ? { ...turn, error: error.message } : turn,
@@ -210,8 +252,14 @@ function SignedIn({ token, user, logout }) {
     }
   }
 
+  function forgetChat() {
+    sessionStorage.removeItem(chatKey);
+    setChat(null);
+  }
+
   function resetChat() {
     if (busy) return;
+    forgetChat();
     setTurns([]);
     setMessage("");
   }
@@ -231,7 +279,13 @@ function SignedIn({ token, user, logout }) {
           onReset={resetChat}
           onRetry={retryTurn}
           onEdit={editTurn}
-          busy={busy}
+          busy={busy || restoring}
+          api={api}
+          chat={chat}
+          openChat={openChat}
+          onDeleted={(id) => {
+            if (id === chat) resetChat();
+          }}
           credits={credits}
           turns={turns}
           openApproval={(id) => {

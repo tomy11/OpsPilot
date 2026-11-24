@@ -113,8 +113,8 @@ class CreditService:
     def stale_after(self) -> timedelta:
         return timedelta(seconds=self.s.agent_run_timeout_s) + STALE_GRACE
 
-    def first_call_cost(self, system: str, message: str, tools: list[Any]) -> int:
-        size = payload_bytes(system, [{"role": "user", "content": message}], tools)
+    def first_call_cost(self, system: str, messages: list[Any], tools: list[Any]) -> int:
+        size = payload_bytes(system, messages, tools)
         return self.pricing.worst_case(size, self.s.ollama_max_tokens)
 
     async def reserve(self, account_id: str, run_id: str, minimum: int) -> Hold:

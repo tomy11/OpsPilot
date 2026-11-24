@@ -6,8 +6,9 @@ from sqlalchemy import select
 from opspilot_agent.api.deps import ServicesDep
 from opspilot_agent.api.schemas import ApprovalOut, DecisionIn
 from opspilot_agent.approvals import ApprovalConflict, transition
+from opspilot_agent.conversations import erp_scope
 from opspilot_agent.erp_client import ErpError
-from opspilot_agent.models import ApprovalDelivery, ApprovalRequest, ApprovalStatus, RunSandbox
+from opspilot_agent.models import ApprovalDelivery, ApprovalRequest, ApprovalStatus
 from opspilot_agent.policy import Decision, can_decide
 from opspilot_agent.worker.workflows import DecisionSignal
 from opspilot_core.api import SessionDep, UserDep
@@ -55,9 +56,9 @@ async def approval_inventory(approval_id: str, user: UserDep, s: SessionDep, svc
     a = await s.get(ApprovalRequest, approval_id)
     if a is None or not _visible(user, a) or a.tool != "create_stock_transfer":
         raise HTTPException(404, "stock transfer not found")
-    sandbox = await s.get(RunSandbox, a.run_id)
+    scope = await erp_scope(s, a.run_id)
     try:
-        with svc.tools.erp.sandbox(sandbox.run_id if sandbox else None):
+        with svc.tools.erp.sandbox(scope):
             result = await svc.tools.erp.get_inventory(a.args["sku"])
     except ErpError as exc:
         raise HTTPException(503, "ERP inventory temporarily unavailable") from exc

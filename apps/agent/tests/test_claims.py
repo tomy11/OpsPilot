@@ -7,6 +7,7 @@ from opspilot_agent.graph import (
     CORRECTION,
     MENTIONS_REQUEST,
     NO_REQUEST_NOTICE,
+    NO_REQUEST_NOTICE_EN,
     AgentDeps,
     run_agent,
 )
@@ -95,7 +96,7 @@ async def test_false_claim_is_sent_back_and_the_request_is_really_made():
     state, made, llm = await run(say(CLAIMS[0]), propose(), say("Proposed changes: one transfer."))
     assert made == ["create_stock_transfer"] and state["approvals"] == ["real-id"]
     assert llm.seen[1][-1] == {"role": "user", "content": CORRECTION}
-    assert NO_REQUEST_NOTICE not in state["answer"] and "stopped_reason" not in state
+    assert "note" not in state["answer"] and "stopped_reason" not in state
     assert [s["type"] for s in state["steps"]].count("correction") == 1
 
 
@@ -121,18 +122,18 @@ async def test_corrected_answer_replaces_the_false_one():
 async def test_repeated_false_claim_gets_a_system_notice_not_a_loop():
     state, made, llm = await run(say(CLAIMS[0]), say(CLAIMS[3]))
     assert made == [] and len(llm.seen) == 2
-    assert state["answer"].endswith(NO_REQUEST_NOTICE)
+    assert state["answer"].endswith(NO_REQUEST_NOTICE_EN)  # the answer is in English
     assert state["stopped_reason"] == "unconfirmed_claim"
 
 
 async def test_no_extra_call_beyond_the_step_limit():
-    state, _, llm = await run(say(CLAIMS[0]), max_steps=1)
+    state, _, llm = await run(say(CLAIMS[1]), max_steps=1)
     assert len(llm.seen) == 1 and state["answer"].endswith(NO_REQUEST_NOTICE)
 
 
 async def test_true_claims_and_plain_answers_cost_no_extra_call():
     state, made, llm = await run(propose(), say(CLAIMS[0]))
-    assert made and len(llm.seen) == 2 and NO_REQUEST_NOTICE not in state["answer"]
+    assert made and len(llm.seen) == 2 and "note" not in state["answer"]
     _, _, llm = await run(say(HONEST[-1]))
     assert len(llm.seen) == 1
 

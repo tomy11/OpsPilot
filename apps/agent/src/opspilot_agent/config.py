@@ -47,6 +47,10 @@ class AgentSettings(CoreSettings):
     approval_timeout_hours: int = 24
 
     agent_max_steps: int = 8
+    # How much of a conversation the model is shown. More memory costs more credits per message.
+    chat_history_turns: int = 8
+    chat_history_bytes: int = 12_000
+    chat_history_requests: int = 20
 
     @property
     def provider(self) -> str:
