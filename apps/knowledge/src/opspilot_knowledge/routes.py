@@ -92,10 +92,12 @@ async def ingest_document(
         },
     )
     await s.commit()
+    indexed = await kb.service.try_index()
     return IngestOut(
         document=DocumentOut.model_validate(result.document),
         created=result.created,
         chunks=result.chunks,
+        indexed=indexed,
     )
 
 

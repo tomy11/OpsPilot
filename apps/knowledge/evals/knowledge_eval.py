@@ -6,15 +6,23 @@ with quality. Metrics:
   mrr              mean reciprocal rank of the expected document
   grounded         answer came back with a valid citation to the expected document
   wrong_answer     answered with citations, but not to the expected document (should be ~0)
+  nothing_retrieved  unanswerable cases where the relevance gate let nothing through
   no_answer_acc    unanswerable / not-permitted cases correctly refused
   acl_leaks        forbidden document appeared in retrieval or citations (must be 0)
 
-Run: uv run python apps/knowledge/evals/knowledge_eval.py   (uses the offline hashing embedder + fake answerer;
-set EMBEDDING_PROVIDER=voyage / LLM_PROVIDER=anthropic in the env to evaluate real models)
+Run: uv run python apps/knowledge/evals/knowledge_eval.py
+     add `--cases semantic --split test` for questions that share no words with the documents
+     (paraphrases and Thai questions about English documents, and the reverse)
+     set EMBEDDING_PROVIDER=ollama to evaluate bge-m3, EVAL_DATABASE_URL to run on Postgres
+
+Thresholds may be chosen on the "tune" split only; "test" is for reporting.
+The answerer is the offline extractive one, so `grounded` says nothing about a real model.
 """
 
+import argparse
 import asyncio
 import json
+import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -23,10 +31,16 @@ from opspilot_core.auth import Role, User
 from opspilot_core.db import Database
 from opspilot_core.llm import LLMClient
 from opspilot_knowledge.answer import FakeGroundedLLM, answer_question
+from opspilot_knowledge.config import KnowledgeSettings
 from opspilot_knowledge.embeddings import Embedder, HashingEmbedder
+from opspilot_knowledge.main import build_embedder
 from opspilot_knowledge.service import KnowledgeService
 
-CASES = Path(__file__).with_name("knowledge_cases.jsonl")
+HERE = Path(__file__).resolve().parent
+FILES = {
+    "keyword": HERE / "knowledge_cases.jsonl",
+    "semantic": HERE / "semantic_cases.jsonl",
+}
 
 
 @dataclass
@@ -38,6 +52,7 @@ class Report:
     grounded: int = 0
     unanswerable: int = 0
     refused: int = 0
+    empty: int = 0
     wrong: int = 0
     acl_leaks: int = 0
     failures: list[str] = field(default_factory=list)
@@ -49,6 +64,7 @@ class Report:
             "mrr": round(self.rr / a, 3),
             "grounded": round(self.grounded / a, 3),
             "wrong_answer": round(self.wrong / a, 3),
+            "nothing_retrieved": round(self.empty / u, 3),
             "no_answer_acc": round(self.refused / u, 3),
             "acl_leaks": self.acl_leaks,
         }
@@ -64,17 +80,27 @@ def _name(source: str) -> str:
 
 
 async def run_eval(
-    embedder: Embedder | None = None, llm: LLMClient | None = None, k: int = 3
+    embedder: Embedder | None = None,
+    llm: LLMClient | None = None,
+    k: int = 3,
+    *,
+    cases: str = "keyword",
+    split: str | None = None,
+    database_url: str = "sqlite+aiosqlite:///:memory:",
 ) -> Report:
-    db = Database("sqlite+aiosqlite:///:memory:")
+    db = Database(database_url)
     await db.create_all()
     kb = KnowledgeService(db, embedder or HashingEmbedder(), top_k=k)
+    await kb.setup()
     await kb.seed_dir()
+    await kb.index_missing()  # fail loudly: an eval without vectors is not an eval
     llm = llm or FakeGroundedLLM()
     report = Report(k=k)
     try:
-        for line in CASES.read_text(encoding="utf-8").splitlines():
+        for line in FILES[cases].read_text(encoding="utf-8").splitlines():
             case = json.loads(line)
+            if split and case.get("split") != split:
+                continue
             user = _user(case["user"])
             hits = await kb.search_as(user, case["question"], k)
             answer = await answer_question(llm, case["question"], hits)
@@ -103,6 +129,7 @@ async def run_eval(
                     report.failures.append(f"{case['id']}: refused ({answer.reason})")
             else:
                 report.unanswerable += 1
+                report.empty += not retrieved
                 if not answer.grounded:
                     report.refused += 1
                 else:
@@ -113,7 +140,20 @@ async def run_eval(
 
 
 def main() -> int:
-    report = asyncio.run(run_eval())
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--cases", choices=FILES, default="keyword")
+    parser.add_argument("--split", choices=["tune", "test"])
+    args = parser.parse_args()
+    embedder = build_embedder(KnowledgeSettings(_env_file=None))
+    print(f"embedder: {embedder.name}, min_vector: {embedder.min_vector}")
+    report = asyncio.run(
+        run_eval(
+            embedder,
+            cases=args.cases,
+            split=args.split,
+            database_url=os.getenv("EVAL_DATABASE_URL", "sqlite+aiosqlite:///:memory:"),
+        )
+    )
     print(json.dumps(report.metrics(), indent=2))
     for f in report.failures:
         print("  -", f)

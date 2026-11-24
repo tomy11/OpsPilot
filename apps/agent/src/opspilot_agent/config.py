@@ -9,16 +9,19 @@ from opspilot_core.config import CoreSettings
 class AgentSettings(CoreSettings):
     # Overrides LLM_PROVIDER for the Agent only; Knowledge and DocFlow do not support "ollama".
     agent_llm_provider: Literal["", "fake", "anthropic", "ollama"] = ""
+    # Two ways in: your own Ollama signed in with `ollama signin` (model name ends in ":cloud",
+    # no key), or https://ollama.com directly (OLLAMA_API_KEY).
+    ollama_base_url: str = "http://localhost:11434"
     ollama_api_key: SecretStr = SecretStr("")
-    ollama_base_url: str = "https://ollama.com"
-    ollama_model: str = "glm-5.2"
-    ollama_effort: Literal["high", "max"] = "high"
+    ollama_model: str = "glm-5.3-flash:cloud"
+    ollama_effort: Literal["low", "high", "max"] = "high"
     ollama_max_tokens: int = 4000  # per model call, thinking included
 
     # Invite-only chat. 1 credit = 0.001 USD, charged from the tokens a run really used.
     credits_enabled: bool = False
-    credit_price_input_usd: float = 1.40  # per 1M tokens, glm-5.2 list price
-    credit_price_output_usd: float = 4.40
+    credit_price_input_usd: float | None = None  # per 1M tokens; None = the model's list price
+    credit_price_output_usd: float | None = None
+    credit_price_cached_usd: float | None = None  # None = same as input when prices are set
     credit_max_per_run: int = 150
     credit_daily_runs: int = 50
     credit_monthly_budget_usd: float = 20.0  # all accounts together

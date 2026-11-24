@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useLayoutEffect, useRef } from "react";
 
+import { Answer } from "@/components/answer";
 import { ErrorAlert, Loading, StatusBadge } from "@/components/feedback";
 import { Button } from "@/components/ui/button";
 import {
@@ -294,9 +295,12 @@ function AgentReply({ run, openApproval }) {
 
   return (
     <>
-      <p className="whitespace-pre-wrap [overflow-wrap:anywhere] leading-relaxed">
-        {run.answer}
-      </p>
+      <Answer text={run.answer} />
+      {run.approvals.length === 0 && (
+        <p className="text-xs text-muted-foreground">
+          ข้อความนี้ไม่ได้สร้างคำขออนุมัติ
+        </p>
+      )}
       {run.credits && (
         <p className="text-xs text-muted-foreground">
           ใช้ {run.credits.charged.toLocaleString("th-TH")} เครดิต

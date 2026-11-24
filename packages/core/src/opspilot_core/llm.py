@@ -8,6 +8,7 @@
 import json
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
+from urllib.parse import urlsplit
 
 from opspilot_core.config import CoreSettings
 
@@ -140,8 +141,16 @@ class AnthropicLLM:
         )
 
 
+def _is_ollama_com(base_url: str) -> bool:
+    host = urlsplit(base_url).hostname or ""
+    return host == "ollama.com" or host.endswith(".ollama.com")
+
+
 class OllamaLLM(AnthropicLLM):
     """Open models (GLM) on Ollama Cloud through its Anthropic-compatible `/v1/messages`.
+
+    Either through your own signed-in Ollama server (`glm-5.3-flash:cloud`, no key; the server
+    ignores the token) or https://ollama.com directly (`glm-5.3-flash`, API key).
 
     Differences from Claude, per https://docs.ollama.com/api/anthropic-compatibility:
     Bearer auth, `anthropic-version: 2023-06-01`, no server-side fallback, no `strict` tools.
@@ -161,8 +170,12 @@ class OllamaLLM(AnthropicLLM):
         timeout_s: float = 120.0,
         http_client: Any = None,
     ) -> None:
-        if not api_key:
-            raise ValueError("OLLAMA_API_KEY is required for the ollama provider")
+        if _is_ollama_com(base_url):
+            if not api_key:
+                raise ValueError("OLLAMA_API_KEY is required for https://ollama.com")
+            model = model.removesuffix(":cloud")  # hosted names have no suffix
+        else:
+            api_key = "ollama"  # a local server needs no key, so never hand it the real one
         import anthropic
 
         super().__init__(

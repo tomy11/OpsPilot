@@ -51,4 +51,21 @@ class KnowledgeChunk(Base):
     ordinal: Mapped[int] = mapped_column(Integer)
     heading: Mapped[str] = mapped_column(String(512))
     text: Mapped[str] = mapped_column(Text)
-    embedding: Mapped[list[Any]] = mapped_column(default=list)
+    embedding: Mapped[list[Any]] = mapped_column(default=list)  # unused; see KnowledgeEmbedding
+
+
+class KnowledgeEmbedding(Base):
+    """One vector per chunk, tagged with the model that made it.
+
+    Vectors from different models are not comparable, so search only uses rows whose `model` is
+    the current one; the rest are re-embedded. On Postgres this table also carries a pgvector
+    copy of `vector` (see `pgvector.py`).
+    """
+
+    __tablename__ = "knowledge_embeddings"
+
+    chunk_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_chunks.id", ondelete="CASCADE"), primary_key=True
+    )
+    model: Mapped[str] = mapped_column(String(128), index=True)
+    vector: Mapped[list[Any]] = mapped_column(default=list)

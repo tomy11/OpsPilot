@@ -26,6 +26,12 @@ from opspilot_core.db import Database, new_id, utcnow
 from opspilot_core.llm import LLMClient, LLMError, LLMTurn
 
 MICRO_PER_CREDIT = 1_000
+# USD per 1M input / output / cached input tokens, https://ollama.com/pricing on 2026-11-24.
+LIST_PRICES = {
+    "glm-5.2": (1.40, 4.40, 0.26),
+    "glm-5.3": (1.40, 4.40, 0.26),
+    "glm-5.3-flash": (0.15, 0.50, 0.03),
+}
 BANGKOK = timezone(timedelta(hours=7))  # days and months follow the users' clock
 STALE_GRACE = timedelta(minutes=2)
 
@@ -50,18 +56,41 @@ def to_credits(micro: int) -> float:
 class Pricing:
     input_usd: float  # per 1M tokens, which is the same number as micro-USD per token
     output_usd: float
+    cached_usd: float
 
     def cost(self, usage: dict[str, Any]) -> int:
-        tokens_in = sum(
-            int(usage.get(k) or 0)
-            for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")
+        # `input_tokens` does not include tokens read from the cache.
+        def count(key: str) -> int:
+            return int(usage.get(key) or 0)
+
+        return math.ceil(
+            (count("input_tokens") + count("cache_creation_input_tokens")) * self.input_usd
+            + count("cache_read_input_tokens") * self.cached_usd
+            + count("output_tokens") * self.output_usd
         )
-        tokens_out = int(usage.get("output_tokens") or 0)
-        return math.ceil(tokens_in * self.input_usd + tokens_out * self.output_usd)
 
     def worst_case(self, payload_bytes: int, max_tokens: int) -> int:
+        # Assumes nothing is cached, so it always covers the real cost.
         # A byte-level tokenizer never produces more tokens than UTF-8 bytes.
         return math.ceil(payload_bytes * self.input_usd + max_tokens * self.output_usd)
+
+
+def pricing_for(s: AgentSettings) -> Pricing:
+    """Configured prices, else the list price. An unknown model must not be charged by guess."""
+    if s.credit_price_input_usd is not None and s.credit_price_output_usd is not None:
+        cached = s.credit_price_cached_usd
+        return Pricing(
+            s.credit_price_input_usd,
+            s.credit_price_output_usd,
+            s.credit_price_input_usd if cached is None else cached,
+        )
+    listed = LIST_PRICES.get(s.ollama_model.removesuffix(":cloud"))
+    if listed is None:
+        raise ValueError(
+            f"no list price for {s.ollama_model}: set CREDIT_PRICE_INPUT_USD and "
+            "CREDIT_PRICE_OUTPUT_USD"
+        )
+    return Pricing(*listed)
 
 
 def payload_bytes(system: str, messages: list[Any], tools: list[Any]) -> int:
@@ -78,7 +107,7 @@ class Hold:
 class CreditService:
     def __init__(self, db: Database, settings: AgentSettings) -> None:
         self.db, self.s = db, settings
-        self.pricing = Pricing(settings.credit_price_input_usd, settings.credit_price_output_usd)
+        self.pricing = pricing_for(settings)
 
     @property
     def stale_after(self) -> timedelta:

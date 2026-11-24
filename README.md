@@ -84,6 +84,7 @@ Key design choices:
 |---|---|
 | LLM never writes directly | Write tools become `ApprovalRequest` rows; only the workflow executes them |
 | Permissions | `opspilot_agent/policy.py` — role check per tool, approver rules (no self-approval, same department) |
+| Answers match reality | If an answer touches on requests or approvals but this run created none, the model must call the tool or rewrite it once; a claim that remains gets a system notice. The UI states when a message created no request |
 | Tool input safety | Strict tool schemas + Pydantic validation before any call |
 | Exactly-once writes | Conditional status transitions in DB + ERP `Idempotency-Key` = approval id |
 | Long waits / crashes | Temporal waits up to 24h for a decision. Pending starts and committed decisions are an outbox in Postgres: retried with backoff, expired if no workflow could start in time, failed (and audited) if an approved workflow is gone |
@@ -93,8 +94,8 @@ Key design choices:
 
 ### Invite-only chat with credits
 
-With `AGENT_LLM_PROVIDER=ollama` the Agent runs on GLM through Ollama Cloud's
-Anthropic-compatible endpoint. `CREDITS_ENABLED=true` limits it to invited accounts:
+With `AGENT_LLM_PROVIDER=ollama` the Agent runs on GLM (`glm-5.3-flash:cloud` by default) through
+Ollama Cloud's Anthropic-compatible endpoint, via your own signed-in Ollama or with an API key. `CREDITS_ENABLED=true` limits it to invited accounts:
 
 | Concern | How |
 |---|---|
@@ -135,7 +136,9 @@ flowchart LR
 | Versioning | Re-uploading a `source` with new content creates version n+1 and retires the old one; same content is a no-op (content hash) |
 | Publishing rights | Managers publish only to their own department; company-wide (`*`) is admin only |
 | Audit | Every ask logs retrieved and cited document ids (question PII-masked); ingest/removal logged |
-| Embeddings | `hash` (offline, deterministic) or `voyage` (Voyage AI API) behind one `Embedder` protocol |
+| Embeddings | `hash` (offline, matches spelling only), `ollama` (bge-m3 on your own Ollama, Thai and English) or `voyage`. Every vector is tagged with its model; changing the model re-embeds all documents without new versions |
+| Vector search | On Postgres: pgvector HNSW with iterative scans plus a GIN token index pick a short list, filtered by access in SQL. SQLite scores everything in Python; a test checks both rank alike |
+| Model outage | Uploads and search keep working by words; vectors are added when the model is back |
 
 Seed documents with access front-matter live in `apps/knowledge/seed/` (one is HR-manager-only salary data,
 one is finance-only) and load at startup.
@@ -156,11 +159,27 @@ off-topic and not-permitted questions. With the offline hashing embedder:
 |---|---|---|---|---|---|
 | 0.95 | 0.95 | 0.95 | 0.05 | 1.00 | 0 |
 
-The one miss is a cross-lingual case (Thai question, English document) that character n-grams
-cannot bridge: the answerer cited the wrong document. A multilingual embedding model
-(`EMBEDDING_PROVIDER=voyage`) is the fix to measure next. CI fails if ACL leaks > 0, correct refusal < 1.0 or hit@3 < 0.9.
-The cases are small and the thresholds were tuned on the same documents, so treat these numbers as
-a regression gate, not a quality claim.
+The one miss is a Thai question about an English document. `--cases semantic` measures that kind
+of question: paraphrases and cross-language questions that share no words with the documents.
+Thresholds were chosen on its 14 "tune" questions; these are the 23 held-out "test" questions:
+
+| Embedder | hit@3 (13 answerable) | nothing retrieved (10 unanswerable) | ACL leaks |
+|---|---|---|---|
+| `hash` | 0.00 | 0.90 | 0 |
+| `ollama` bge-m3, threshold 0.52 | 0.92 | 0.90 | 0 |
+
+bge-m3 gives the same numbers on SQLite and Postgres, and 1.00 hit@3 on the keyword set. Similarity
+scores are model-specific (unrelated texts score about 0.4 with bge-m3), so a model without a
+measured threshold refuses to start until `KNOWLEDGE_MIN_VECTOR` is set.
+
+```bash
+ollama pull bge-m3
+EMBEDDING_PROVIDER=ollama uv run python apps/knowledge/evals/knowledge_eval.py --cases semantic --split test
+```
+
+The sets are small and cover seven documents, and the answerer in the eval is the offline
+extractive one, so this is a regression gate and a comparison, not a quality claim. CI runs the
+`hash` keyword set and fails if ACL leaks > 0, correct refusal < 1.0 or hit@3 < 0.9.
 
 ## OpsPilot DocFlow
 
@@ -219,7 +238,7 @@ apps/agent/                  opspilot-agent
     worker/                  Temporal ApprovalWorkflow + activities + worker entrypoint
   tests/                     policy, ERP client, agent API, Temporal workflow, Agent->Knowledge over HTTP
 apps/knowledge/              opspilot-knowledge
-  src/opspilot_knowledge/    models + ACL, chunking, tokeniser, embeddings, retrieval, grounded answers, API
+  src/opspilot_knowledge/    models + ACL, chunking, tokeniser, embeddings, pgvector, retrieval, grounded answers, API
   seed/                      seed documents with access front-matter
   evals/                     retrieval/answer eval (cases + runner)
   tests/                     ACL, citations, versioning, publishing rights, eval gate
@@ -280,6 +299,8 @@ Chaos testing: `CHAOS_ERROR_RATE=0.3 CHAOS_LATENCY_MS=500 docker compose up erp-
 ```bash
 uv run pytest -q                                  # whole workspace; first run downloads Temporal's test server
 uv run pytest -q apps/knowledge                   # one package
+TEST_POSTGRES_URL=postgresql+asyncpg://opspilot:opspilot@localhost:5432/opspilot \
+  uv run pytest -q apps/knowledge                 # also on Postgres with pgvector 0.8+
 uv run ruff check . && uv run ruff format --check .
 uv run python apps/knowledge/evals/knowledge_eval.py
 uv run python apps/docflow/evals/docflow_eval.py
@@ -313,5 +334,5 @@ Finish and verify all three modules on staging with `erp-mock` before starting M
 - Langfuse tracing on LLM calls and tool steps
 - Alembic migrations instead of `create_all`
 - Real IdP (OIDC + JWKS) instead of `/auth/dev-token` and the shared HS256 secret
-- Knowledge: push BM25/cosine into Postgres (pgvector `<=>`, `tsvector`) for large corpora; Thai word segmentation (PyThaiNLP); PDF/DOCX ingestion; reranker
+- Knowledge: word statistics still count every accessible chunk per query; Thai word segmentation (PyThaiNLP); PDF/DOCX ingestion; reranker
 - DocFlow: async extraction queue (Temporal) for large batches; object storage instead of DB blobs; 3-way match with goods receipts; scanned-PDF eval set for Claude

@@ -19,7 +19,7 @@ from opspilot_agent.api.orchestrator import (
 )
 from opspilot_agent.api.routes import agent, approvals, demo, invites
 from opspilot_agent.config import AgentSettings, get_settings
-from opspilot_agent.credits import CreditService
+from opspilot_agent.credits import CreditService, pricing_for
 from opspilot_agent.erp_client import ErpClient
 from opspilot_agent.fake_llm import FakeLLM
 from opspilot_agent.knowledge_client import KnowledgeClient
@@ -50,6 +50,8 @@ def check_chat_settings(s: AgentSettings) -> None:
         raise ValueError("credit prices are set for the ollama provider, not anthropic")
     if s.app_env == "prod" and s.provider == "ollama" and not s.credits_enabled:
         raise ValueError("the ollama provider needs CREDITS_ENABLED=true in prod")
+    if s.credits_enabled:
+        pricing_for(s)  # refuse to start rather than charge a wrong price
 
 
 def create_app(

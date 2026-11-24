@@ -36,6 +36,7 @@ class IngestOut(BaseModel):
     document: DocumentOut
     created: bool
     chunks: int
+    indexed: bool  # False = found by words now, by meaning once the model is back
 
 
 class SearchIn(BaseModel):

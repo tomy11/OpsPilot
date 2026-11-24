@@ -8,6 +8,20 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: opspilot
+          POSTGRES_PASSWORD: opspilot
+          POSTGRES_DB: opspilot
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U opspilot"
+          --health-interval 5s
+          --health-retries 10
+    env:
+      TEST_POSTGRES_URL: postgresql+asyncpg://opspilot:opspilot@localhost:5432/opspilot
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,4 +40,5 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run pytest -q
       - run: uv run python apps/knowledge/evals/knowledge_eval.py
+      - run: uv run python apps/knowledge/evals/knowledge_eval.py --cases semantic
       - run: uv run python apps/docflow/evals/docflow_eval.py

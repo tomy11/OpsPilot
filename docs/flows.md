@@ -284,14 +284,17 @@ flowchart TD
   in["Markdown + departments + min_role<br/>(หรือ seed/*.md พร้อม front-matter)"] --> who{"ผู้เผยแพร่"}
   who -- staff --> x1["403"]
   who -- "manager แผนกอื่น หรือ '*'" --> x2["403 เผยแพร่ได้เฉพาะแผนกตัวเอง"]
-  who -- "manager แผนกตัวเอง / admin" --> h["sha256(title, content, ACL, embedder)"]
+  who -- "manager แผนกตัวเอง / admin" --> h["sha256(title, content, ACL)"]
   h --> same{"ตรงกับ version ที่ active?"}
   same -- ใช่ --> nochange["created=false ไม่ทำอะไร"]
   same -- ไม่ --> chunk["chunk ตามหัวข้อ<br/>เก็บ path หัวข้อไว้อ้างอิง ≤ 800 ตัวอักษร"]
-  chunk --> emb["embed: hash 512 มิติ (offline)<br/>หรือ Voyage"]
-  emb --> ver["version เดิม active=false<br/>สร้าง version n+1"]
-  ver --> acl["insert knowledge_acl<br/>1 แถวต่อแผนก หรือ '*'"]
+  chunk --> ver["version เดิม active=false ลบ vector เดิม<br/>สร้าง version n+1"]
+  ver --> acl["insert knowledge_acl และ token ของคำ"]
   acl --> aud["audit knowledge.document.ingested"]
+  aud --> emb{"โมเดล embedding ตอบไหม?"}
+  emb -- ตอบ --> vec["เก็บ vector พร้อมชื่อโมเดล<br/>hash 512 มิติ / bge-m3 1024 มิติ / Voyage"]
+  emb -- ไม่ตอบ --> wait["indexed=false ค้นด้วยคำได้ก่อน<br/>ลองใหม่ทุก 30 วินาที"]
+  wait --> emb
 ```
 
 ## ค้นหาและตอบคำถาม
@@ -305,8 +308,8 @@ flowchart TD
   q["คำถาม + User(role, department)"] --> f["SQL WHERE<br/>active AND min_role_rank ≤ role<br/>AND ACL ∈ {แผนกผู้ใช้, '*'}"]
   f --> tok["tokenize: ไทยเป็น bigram<br/>อังกฤษตัด stopword"]
   tok --> bm["BM25 + coverage ของคำในคำถาม"]
-  f --> cos["cosine ของ embedding"]
-  bm --> gate{"coverage ≥ 0.5<br/>หรือ cosine ≥ 0.3?"}
+  f --> cos["vector: pgvector HNSW บน Postgres<br/>หรือคิดใน Python บน SQLite"]
+  bm --> gate{"coverage ≥ 0.5<br/>หรือ vector ถึงเกณฑ์ของโมเดล?<br/>hash 0.3 · bge-m3 0.52"}
   cos --> gate
   gate -- "ไม่มี chunk ผ่าน" --> nf["ไม่พบข้อมูลที่ยืนยันได้"]
   gate -- ผ่าน --> rrf["RRF fusion (k=60) → top 5"]
@@ -321,7 +324,8 @@ flowchart TD
 
 - admin ไม่ได้สิทธิ์อ่านทุกเอกสาร แต่ลบ (deactivate) เอกสารได้ทุกตัว
 - ลบเอกสารที่ไม่มีสิทธิ์อ่านจะได้ 404 ไม่ใช่ 403 คนนอกจึงเดาไม่ได้ว่ามีเอกสารนั้นอยู่
-- eval 29 เคส: hit@3 0.95 · ปฏิเสธถูก 1.00 · สิทธิ์รั่ว 0 (CI ตกถ้ามีการรั่ว)
+- eval 29 เคส (hash): hit@3 0.95 · ปฏิเสธถูก 1.00 · สิทธิ์รั่ว 0 (CI ตกถ้ามีการรั่ว)
+- คำถามที่ไม่มีคำตรงกับเอกสาร 13 ข้อ: hash เจอ 0 · bge-m3 เจอ 12
 
 ---
 

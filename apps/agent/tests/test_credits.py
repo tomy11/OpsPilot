@@ -10,7 +10,7 @@ from sqlalchemy import func, select, update
 from opspilot_agent import accounts, accounts_cli
 from opspilot_agent.api.main import check_chat_settings, create_app
 from opspilot_agent.config import AgentSettings
-from opspilot_agent.credits import CreditDenied, CreditService, Pricing
+from opspilot_agent.credits import CreditDenied, CreditService, Pricing, pricing_for
 from opspilot_agent.models import (
     AgentRun,
     ApprovalRequest,
@@ -96,6 +96,8 @@ class Chat:
 @pytest.fixture
 async def chat(settings, erp_transport, knowledge_transport):
     settings.credits_enabled = True
+    # Fixed prices, so these tests do not depend on the chosen model's list price.
+    settings.credit_price_input_usd, settings.credit_price_output_usd = 1.40, 4.40
     llm = PaidLLM()
     app = create_app(
         settings, erp_transport=erp_transport, knowledge_transport=knowledge_transport, llm=llm
@@ -217,11 +219,19 @@ async def test_invited_user_cannot_approve_or_see_other_peoples_requests(chat):
 # ---- charging ---------------------------------------------------------------------------------
 
 
-def test_cost_counts_cached_input_at_full_price_and_rounds_up():
-    p = Pricing(1.40, 4.40)
+def test_cost_uses_the_cached_price_and_rounds_up():
+    p = Pricing(1.40, 4.40, 0.26)
     assert p.cost(USAGE) == 3600
-    assert p.cost({"input_tokens": 1, "cache_read_input_tokens": 1, "output_tokens": 0}) == 3
+    assert p.cost({"input_tokens": 0, "cache_read_input_tokens": 1000}) == 260
+    assert p.cost({"input_tokens": 0, "cache_creation_input_tokens": 1000}) == 1400
+    assert p.cost({"input_tokens": 1}) == 2
     assert p.cost({}) == 0
+
+
+def test_worst_case_covers_the_real_cost_even_with_nothing_cached():
+    p = Pricing(0.15, 0.50, 0.03)
+    fully_fresh = {"input_tokens": 5000, "output_tokens": 4000}
+    assert p.worst_case(5000, 4000) >= p.cost(fully_fresh)
 
 
 async def test_run_is_charged_for_real_usage_and_the_rest_is_refunded(chat):
@@ -413,6 +423,29 @@ async def test_cli_invites_tops_up_and_disables(chat, capsys):
     async with chat.db.sessionmaker() as s:
         rows = (await s.scalars(select(AuditLog).where(AuditLog.target == account_id))).all()
         assert url.removeprefix(prefix) not in str([r.detail for r in rows])
+
+
+@pytest.mark.parametrize(
+    ("model", "expected"),
+    [
+        ("glm-5.3-flash:cloud", Pricing(0.15, 0.50, 0.03)),
+        ("glm-5.3-flash", Pricing(0.15, 0.50, 0.03)),
+        ("glm-5.2", Pricing(1.40, 4.40, 0.26)),
+    ],
+)
+def test_price_follows_the_model(model, expected):
+    assert pricing_for(AgentSettings(_env_file=None, ollama_model=model)) == expected
+
+
+def test_unknown_model_needs_prices_before_anyone_is_charged():
+    unknown = {"_env_file": None, "ollama_model": "mystery:cloud", "credits_enabled": True}
+    with pytest.raises(ValueError, match="CREDIT_PRICE"):
+        check_chat_settings(AgentSettings(**unknown))
+    priced = AgentSettings(**unknown, credit_price_input_usd=1, credit_price_output_usd=2)
+    check_chat_settings(priced)
+    assert pricing_for(priced) == Pricing(1, 2, 1)  # cached defaults to the full input price
+    priced.credit_price_cached_usd = 0.0
+    assert pricing_for(priced) == Pricing(1, 2, 0.0)
 
 
 def test_paid_provider_needs_credits_in_prod():

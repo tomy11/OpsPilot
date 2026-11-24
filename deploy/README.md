@@ -71,11 +71,17 @@ are on, and the shared demo accounts then cannot chat, so run the smoke test wit
 
 ```dotenv
 AGENT_LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=https://ollama.com
 OLLAMA_API_KEY=<key from ollama.com/settings/keys>
-OLLAMA_MODEL=glm-5.2
+OLLAMA_MODEL=glm-5.3-flash
 CREDITS_ENABLED=true
 CREDIT_MONTHLY_BUDGET_USD=20
 ```
+
+To go through an Ollama server on the host instead, run `ollama signin` there, leave
+`OLLAMA_BASE_URL` and `OLLAMA_API_KEY` unset and use `OLLAMA_MODEL=glm-5.3-flash:cloud`. The
+container reaches it at `host.docker.internal:11434`. Every chat is then paid by the account
+signed in on that server.
 
 Accounts are managed from the host only. Credits are 0.001 USD of model usage each.
 
@@ -96,7 +102,18 @@ other read-only pages stop within 15 minutes.
 Each message reserves up to 150 credits, is charged for the tokens the model reported, and gets
 the rest back. A run stops before a call its reservation cannot cover. Calls that fail without
 reporting usage are not charged to the user, so also watch usage in the Ollama account.
-Changing the model means changing `CREDIT_PRICE_INPUT_USD` and `CREDIT_PRICE_OUTPUT_USD`.
+Prices come from a built-in list for the GLM models; any other model needs
+`CREDIT_PRICE_INPUT_USD` and `CREDIT_PRICE_OUTPUT_USD` (and optionally
+`CREDIT_PRICE_CACHED_USD`), or the Agent does not start.
+
+## Search by meaning
+
+Set `EMBEDDING_PROVIDER=ollama` after `ollama pull bge-m3` (1.2 GB) on the host. The Knowledge
+container reaches it at `host.docker.internal:11434`; on Linux make Ollama listen on the Docker
+bridge (`OLLAMA_HOST`) and keep port 11434 closed to the internet, because Ollama has no login.
+On the next start every document is embedded again, before the service reports ready. The
+service also starts and answers by words when Ollama is down. The database needs pgvector 0.8 or
+newer, and the database user must be allowed to run `CREATE EXTENSION vector` once.
 
 ## Operations
 

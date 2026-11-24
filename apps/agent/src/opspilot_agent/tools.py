@@ -26,11 +26,11 @@ class _Args(BaseModel):
 
 
 class GetOrderArgs(_Args):
-    order_id: str = Field(description="Order id, e.g. ORD-1001")
+    order_id: str = Field(description="Order id exactly as the user or a tool gave it")
 
 
 class CheckStockArgs(_Args):
-    sku: str = Field(description="SKU code, e.g. SKU-COFFEE")
+    sku: str = Field(description="SKU code exactly as the user or a tool gave it")
     branch: str = Field(description="Branch code, or 'all' for every branch")
 
 

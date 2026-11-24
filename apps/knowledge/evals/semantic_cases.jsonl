@@ -1,0 +1,37 @@
+{"id": "t-01", "split": "tune", "user": "staff@ops", "question": "รหัสผ่านต้องยาวอย่างน้อยกี่ตัวอักษร", "expect": "password-policy.md"}
+{"id": "t-02", "split": "tune", "user": "staff@finance", "question": "How many vacation days do I get each year?", "expect": "leave-policy.md"}
+{"id": "t-03", "split": "tune", "user": "staff@ops", "question": "ใครต้องอนุมัติก่อนย้ายของระหว่างสาขา", "expect": "stock-transfer.md"}
+{"id": "t-04", "split": "tune", "user": "staff@hr", "question": "Can I claim a hotel or taxi for an upcountry trip?", "expect": "expense-reimbursement.md"}
+{"id": "t-05", "split": "tune", "user": "staff@finance", "question": "ปิดบัญชีแยกประเภทวันไหนของเดือน", "expect": "month-end-close.md"}
+{"id": "t-06", "split": "tune", "user": "manager@hr", "question": "What is the pay range for a senior employee?", "expect": "salary-structure.md"}
+{"id": "t-07", "split": "tune", "user": "staff@ops", "question": "ลูกค้าเปลี่ยนใจไม่เอาของแล้ว ต้องทำอย่างไร", "expect": "order-cancellation.md"}
+{"id": "t-08", "split": "tune", "user": "staff@ops", "question": "ไม่สบายต้องหยุดงาน ต้องใช้เอกสารอะไร", "expect": "leave-policy.md"}
+{"id": "t-n1", "split": "tune", "user": "staff@ops", "question": "วันนี้อากาศเป็นอย่างไร", "expect": null}
+{"id": "t-n2", "split": "tune", "user": "staff@ops", "question": "Who won the football match last night?", "expect": null}
+{"id": "t-n3", "split": "tune", "user": "staff@hr", "question": "สูตรทำต้มยำกุ้ง", "expect": null}
+{"id": "t-n4", "split": "tune", "user": "staff@finance", "question": "Recommend a beach for the holidays", "expect": null}
+{"id": "t-n5", "split": "tune", "user": "staff@ops", "question": "How do I fix a flat bicycle tyre?", "expect": null}
+{"id": "t-n6", "split": "tune", "user": "staff@hr", "question": "ราคาทองคำวันนี้เท่าไร", "expect": null}
+{"id": "e-01", "split": "test", "user": "staff@hr", "question": "ระบบไหนบ้างที่ต้องยืนยันตัวตนสองชั้น", "expect": "password-policy.md"}
+{"id": "e-02", "split": "test", "user": "staff@ops", "question": "สงสัยว่ามีคนแอบเข้าบัญชีของฉัน ต้องแจ้งใคร", "expect": "password-policy.md"}
+{"id": "e-03", "split": "test", "user": "staff@ops", "question": "Do I need a doctor's note when I am off sick?", "expect": "leave-policy.md"}
+{"id": "e-04", "split": "test", "user": "staff@finance", "question": "Can unused annual leave carry over?", "expect": "leave-policy.md"}
+{"id": "e-05", "split": "test", "user": "staff@hr", "question": "How long do I have to submit a receipt?", "expect": "expense-reimbursement.md"}
+{"id": "e-06", "split": "test", "user": "staff@ops", "question": "Who signs off on spending above 5,000 baht?", "expect": "expense-reimbursement.md"}
+{"id": "e-07", "split": "test", "user": "staff@ops", "question": "ต้องเหลือของไว้ที่สาขาต้นทางอย่างน้อยเท่าไร", "expect": "stock-transfer.md"}
+{"id": "e-08", "split": "test", "user": "manager@ops", "question": "ระหว่างรอโอนของ ออเดอร์ควรอยู่สถานะอะไร", "expect": "stock-transfer.md"}
+{"id": "e-09", "split": "test", "user": "staff@ops", "question": "ออเดอร์ที่ส่งของไปแล้วยกเลิกได้ไหม", "expect": "order-cancellation.md"}
+{"id": "e-10", "split": "test", "user": "staff@ops", "question": "ใครมีสิทธิ์แก้ตัวเลขสต็อกเองในระบบ", "expect": "order-cancellation.md"}
+{"id": "e-11", "split": "test", "user": "staff@finance", "question": "ต้องกระทบยอดขายของสาขาให้เสร็จภายในเมื่อไร", "expect": "month-end-close.md"}
+{"id": "e-12", "split": "test", "user": "manager@hr", "question": "How big is the annual raise budget?", "expect": "salary-structure.md"}
+{"id": "e-13", "split": "test", "user": "staff@hr", "question": "How much notice for personal business leave?", "expect": "leave-policy.md"}
+{"id": "e-n1", "split": "test", "user": "staff@ops", "question": "รถไฟฟ้าปิดกี่โมง", "expect": null}
+{"id": "e-n2", "split": "test", "user": "staff@hr", "question": "What is the capital of Australia?", "expect": null}
+{"id": "e-n3", "split": "test", "user": "staff@finance", "question": "แนะนำหนังน่าดูหน่อย", "expect": null}
+{"id": "e-n4", "split": "test", "user": "staff@ops", "question": "How do plants make food?", "expect": null}
+{"id": "e-n5", "split": "test", "user": "staff@ops", "question": "ร้านก๋วยเตี๋ยวอร่อยแถวบางนา", "expect": null}
+{"id": "e-n6", "split": "test", "user": "staff@hr", "question": "Write a poem about the sea", "expect": null}
+{"id": "e-a1", "split": "test", "user": "staff@hr", "question": "What is the pay range for a manager?", "expect": null, "forbid": ["salary-structure.md"]}
+{"id": "e-a2", "split": "test", "user": "admin@it", "question": "How big is the annual raise budget?", "expect": null, "forbid": ["salary-structure.md"]}
+{"id": "e-a3", "split": "test", "user": "staff@ops", "question": "ปิดบัญชีแยกประเภทวันไหนของเดือน", "expect": null, "forbid": ["month-end-close.md"]}
+{"id": "e-a4", "split": "test", "user": "staff@finance", "question": "ใครต้องอนุมัติก่อนย้ายของระหว่างสาขา", "expect": null, "forbid": ["stock-transfer.md"]}
