@@ -5,7 +5,9 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from opspilot_agent.api.deps import ServicesDep
-from opspilot_core.api import TokenOut, UserDep
+from opspilot_agent.credits import to_credits
+from opspilot_agent.models import ChatAccount
+from opspilot_core.api import SessionDep, TokenOut, UserDep
 from opspilot_core.auth import Role, User, issue_token
 
 router = APIRouter(prefix="/session", tags=["demo"])
@@ -18,6 +20,9 @@ class LoginIn(BaseModel):
 
 class SessionOut(User):
     approval_backend: Literal["temporal", "inline"]
+    invited: bool = False
+    label: str | None = None
+    credits: float | None = None  # None = not limited by credits
 
 
 @router.post("/login", response_model=TokenOut)
@@ -50,5 +55,12 @@ async def login(body: LoginIn, svc: ServicesDep, request: Request, response: Res
 
 
 @router.get("/me", response_model=SessionOut)
-async def me(user: UserDep, svc: ServicesDep):
-    return SessionOut(**user.model_dump(), approval_backend=svc.settings.approval_backend)
+async def me(user: UserDep, svc: ServicesDep, s: SessionDep):
+    account = await s.get(ChatAccount, user.id)
+    return SessionOut(
+        **user.model_dump(),
+        approval_backend=svc.settings.approval_backend,
+        invited=account is not None,
+        label=account.label if account else None,
+        credits=to_credits(account.balance_micro) if account and svc.credits else None,
+    )

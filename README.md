@@ -91,6 +91,22 @@ Key design choices:
 | Audit / PDPA | Every tool call, request, decision and execution is in `audit_logs`; PII masked |
 | Offline dev | `LLM_PROVIDER=fake` deterministic planner, `APPROVAL_BACKEND=inline` without Temporal |
 
+### Invite-only chat with credits
+
+With `AGENT_LLM_PROVIDER=ollama` the Agent runs on GLM through Ollama Cloud's
+Anthropic-compatible endpoint. `CREDITS_ENABLED=true` limits it to invited accounts:
+
+| Concern | How |
+|---|---|
+| Who may chat | One-time invite links created from the operator CLI; accounts are always `staff`, so they propose and never approve |
+| Overspending | A worst-case check before every model call, against credits reserved before the run; the balance is a conditional UPDATE with a non-negative constraint |
+| Parallel tabs | One open reservation per account (primary key); a second run gets 409 |
+| Total cost | Monthly budget across all accounts, daily messages per account, output cap per call |
+| Crashes and timeouts | Spend is saved after each call; an abandoned reservation is settled with that amount |
+| Audit | Append-only credit ledger whose sum equals the balance |
+
+Setup and commands: [deploy/README.md](deploy/README.md#invite-only-chat-on-ollama-cloud).
+
 ## OpsPilot Knowledge
 
 ```mermaid
@@ -247,7 +263,8 @@ smoke test for the approval flow.
 
 The Agent image builds the React workspace with Vite, Tailwind CSS, and shadcn/ui. For local
 UI development with the Agent API on port 8000, run `npm ci` and `npm run dev` in
-`apps/agent/src/opspilot_agent/web`. Set `AGENT_API_ORIGIN` to proxy a different API origin.
+`apps/agent/src/opspilot_agent/web`. The Knowledge page also needs the Knowledge API on
+port 8200. Set `AGENT_API_ORIGIN` or `KNOWLEDGE_API_ORIGIN` to proxy a different API origin.
 To serve the built UI directly from local FastAPI, run `npm run build` before starting uvicorn.
 
 One `Dockerfile` builds any member: `docker build --build-arg PACKAGE=opspilot-knowledge .`

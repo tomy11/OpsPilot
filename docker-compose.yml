@@ -82,7 +82,13 @@ services:
   agent:
     build: { context: ., args: { PACKAGE: opspilot-agent } }
     command: ["uvicorn", "opspilot_agent.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
-    environment: *agent-env
+    environment:
+      <<: *agent-env
+      AGENT_LLM_PROVIDER: ${AGENT_LLM_PROVIDER:-}
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-glm-5.2}
+      CREDITS_ENABLED: ${CREDITS_ENABLED:-false}
+      CREDIT_MONTHLY_BUDGET_USD: ${CREDIT_MONTHLY_BUDGET_USD:-20}
     ports: ["8000:8000"]
     depends_on:
       postgres: { condition: service_healthy }

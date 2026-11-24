@@ -36,11 +36,11 @@ class LoginLimiter:
             return deque()
         return q
 
-    def retry_after(self, ip: str, username: str) -> int | None:
+    def retry_after(self, ip: str, username: str | None = None) -> int | None:
         """Seconds until a new attempt is allowed, or None if allowed now."""
         now = self.clock()
         waits = []
-        for kind, value in (("ip", ip), ("user", username)):
+        for kind, value in self._keys(ip, username):
             q = self._recent((kind, value), now)
             if len(q) >= self.limits[kind]:
                 waits.append(q[0] + self.window_s - now)
@@ -54,10 +54,14 @@ class LoginLimiter:
         for key in list(self._failures):
             self._recent(key, now)
 
-    def failed(self, ip: str, username: str) -> None:
+    @staticmethod
+    def _keys(ip: str, username: str | None) -> list[tuple[str, str]]:
+        return [("ip", ip)] + ([("user", username)] if username is not None else [])
+
+    def failed(self, ip: str, username: str | None = None) -> None:
         now = self.clock()
         self._sweep(now)
-        for key in (("ip", ip), ("user", username)):
+        for key in self._keys(ip, username):
             self._failures[key].append(now)
 
     def succeeded(self, ip: str) -> None:

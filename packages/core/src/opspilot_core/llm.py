@@ -1,6 +1,7 @@
 """LLM client abstraction.
 
 `AnthropicLLM` calls Claude through the official Anthropic SDK (Messages API + client tools).
+`OllamaLLM` reuses it against Ollama Cloud's Anthropic-compatible endpoint.
 `FakeLLM` lives in `opspilot_agent.fake_llm` and gives a deterministic planner for tests and offline demos.
 """
 
@@ -38,7 +39,11 @@ class LLMClient(Protocol):
 
 
 class LLMError(Exception):
-    pass
+    """`usage` is set when the provider answered (and billed) but the answer is unusable."""
+
+    def __init__(self, message: str, *, usage: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.usage = usage or {}
 
 
 class AnthropicLLM:
@@ -105,11 +110,17 @@ class AnthropicLLM:
         if tools:
             params["tools"] = tools
         response = await self._create(params)
+        usage = response.usage.model_dump(mode="json", exclude_none=True)
 
         if response.stop_reason == "refusal":
-            return LLMTurn(content=[], text="ขออภัย ไม่สามารถดำเนินการคำขอนี้ได้", stop_reason="refusal")
+            return LLMTurn(
+                content=[],
+                text="ขออภัย ไม่สามารถดำเนินการคำขอนี้ได้",
+                stop_reason="refusal",
+                usage=usage,
+            )
         if response.stop_reason == "max_tokens":
-            raise LLMError("LLM response truncated (max_tokens)")
+            raise LLMError("LLM response truncated (max_tokens)", usage=usage)
 
         content = [
             b.model_dump(by_alias=True, exclude_none=True, mode="json") for b in response.content
@@ -125,5 +136,60 @@ class AnthropicLLM:
             tool_calls=tool_calls,
             text=text,
             stop_reason=response.stop_reason,
-            usage=response.usage.model_dump(mode="json", exclude_none=True),
+            usage=usage,
         )
+
+
+class OllamaLLM(AnthropicLLM):
+    """Open models (GLM) on Ollama Cloud through its Anthropic-compatible `/v1/messages`.
+
+    Differences from Claude, per https://docs.ollama.com/api/anthropic-compatibility:
+    Bearer auth, `anthropic-version: 2023-06-01`, no server-side fallback, no `strict` tools.
+    Tool arguments are still validated by Pydantic before anything runs. The SDK does not retry
+    here: a retried call could be billed twice while only one usage record comes back.
+    """
+
+    def __init__(
+        self,
+        settings: CoreSettings,
+        *,
+        api_key: str,
+        base_url: str,
+        model: str,
+        effort: str,
+        max_tokens: int,
+        timeout_s: float = 120.0,
+        http_client: Any = None,
+    ) -> None:
+        if not api_key:
+            raise ValueError("OLLAMA_API_KEY is required for the ollama provider")
+        import anthropic
+
+        super().__init__(
+            settings.model_copy(
+                update={
+                    "llm_model": model,
+                    "llm_effort": effort,
+                    "llm_max_tokens": max_tokens,
+                    "llm_server_fallback": False,
+                }
+            ),
+            anthropic.AsyncAnthropic(
+                auth_token=api_key,
+                base_url=base_url,
+                # Never let an ANTHROPIC_API_KEY in the environment travel to another provider.
+                default_headers={
+                    "anthropic-version": "2023-06-01",
+                    "X-Api-Key": anthropic.Omit(),
+                },
+                max_retries=0,
+                timeout=timeout_s,
+                http_client=http_client,
+            ),
+        )
+
+    async def respond(
+        self, *, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
+    ) -> LLMTurn:
+        tools = [{k: v for k, v in tool.items() if k != "strict"} for tool in tools]
+        return await super().respond(system=system, messages=messages, tools=tools)

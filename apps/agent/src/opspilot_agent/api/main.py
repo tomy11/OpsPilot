@@ -17,8 +17,9 @@ from opspilot_agent.api.orchestrator import (
     InlineOrchestrator,
     TemporalOrchestrator,
 )
-from opspilot_agent.api.routes import agent, approvals, demo
+from opspilot_agent.api.routes import agent, approvals, demo, invites
 from opspilot_agent.config import AgentSettings, get_settings
+from opspilot_agent.credits import CreditService
 from opspilot_agent.erp_client import ErpClient
 from opspilot_agent.fake_llm import FakeLLM
 from opspilot_agent.knowledge_client import KnowledgeClient
@@ -26,9 +27,29 @@ from opspilot_agent.models import AgentRun, ApprovalRequest
 from opspilot_agent.tools import ToolContext
 from opspilot_core.api import CoreState, core_router
 from opspilot_core.db import Database
-from opspilot_core.llm import AnthropicLLM, LLMClient
+from opspilot_core.llm import AnthropicLLM, LLMClient, OllamaLLM
 
 WEB_DIST = Path(__file__).resolve().parents[1] / "web" / "dist"
+
+
+def build_llm(s: AgentSettings) -> LLMClient:
+    if s.provider == "ollama":
+        return OllamaLLM(
+            s,
+            api_key=s.ollama_api_key.get_secret_value(),
+            base_url=s.ollama_base_url,
+            model=s.ollama_model,
+            effort=s.ollama_effort,
+            max_tokens=s.ollama_max_tokens,
+        )
+    return AnthropicLLM(s) if s.provider == "anthropic" else FakeLLM()
+
+
+def check_chat_settings(s: AgentSettings) -> None:
+    if s.credits_enabled and s.provider == "anthropic":
+        raise ValueError("credit prices are set for the ollama provider, not anthropic")
+    if s.app_env == "prod" and s.provider == "ollama" and not s.credits_enabled:
+        raise ValueError("the ollama provider needs CREDITS_ENABLED=true in prod")
 
 
 def create_app(
@@ -53,6 +74,7 @@ def create_app(
                 raise ValueError("JWT_SECRET must have at least 32 bytes")
             if any(passwords) and (min(map(len, passwords)) < 16 or passwords[0] == passwords[1]):
                 raise ValueError("configure distinct demo passwords of at least 16 characters")
+        check_chat_settings(s)
         db = Database(s.database_url)
         await db.create_all()
         erp = ErpClient(s.erp_base_url, timeout_s=s.erp_timeout_s, transport=erp_transport)
@@ -63,7 +85,7 @@ def create_app(
             transport=knowledge_transport,
         )
         tools = ToolContext(erp=erp, knowledge=kb)
-        model = llm or (AnthropicLLM(s) if s.llm_provider == "anthropic" else FakeLLM())
+        model = llm or build_llm(s)
 
         orch = orchestrator
         if orch is None:
@@ -83,7 +105,14 @@ def create_app(
                 (ApprovalRequest.id, ApprovalRequest.department),
             ),
         )
-        app.state.services = Services(settings=s, db=db, tools=tools, llm=model, orchestrator=orch)
+        app.state.services = Services(
+            settings=s,
+            db=db,
+            tools=tools,
+            llm=model,
+            orchestrator=orch,
+            credits=CreditService(db, s) if s.credits_enabled else None,
+        )
         delivery = (
             asyncio.create_task(run_delivery(db, orch, timeout_hours=s.approval_timeout_hours))
             if s.approval_backend == "temporal"
@@ -110,6 +139,7 @@ def create_app(
     app.include_router(agent.router)
     app.include_router(approvals.router)
     app.include_router(demo.router)
+    app.include_router(invites.router)
     if (WEB_DIST / "index.html").is_file():
         app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")
     return app

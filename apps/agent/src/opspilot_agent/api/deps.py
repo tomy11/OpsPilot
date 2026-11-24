@@ -5,6 +5,7 @@ from fastapi import Depends, Request
 
 from opspilot_agent.api.orchestrator import ApprovalOrchestrator
 from opspilot_agent.config import AgentSettings
+from opspilot_agent.credits import CreditService
 from opspilot_agent.tools import ToolContext
 from opspilot_core.db import Database
 from opspilot_core.llm import LLMClient
@@ -17,6 +18,7 @@ class Services:
     tools: ToolContext
     llm: LLMClient
     orchestrator: ApprovalOrchestrator
+    credits: CreditService | None = None  # None = unlimited (credits disabled)
 
 
 def services(request: Request) -> Services:

@@ -1,4 +1,4 @@
-"""Verify the Gateway → Agent API → Temporal → ERP flow on a seeded staging instance."""
+"""Verify Agent approvals and Knowledge access on a seeded staging instance."""
 
 import argparse
 import json
@@ -59,6 +59,23 @@ def run(base_url: str, staff_password: str, manager_password: str) -> None:
     manager = login("manager", manager_password)
     assert call("/session/me", token=staff)["approval_backend"] == "temporal"
 
+    public_question = {"question": "ลาพักร้อนได้กี่วันต่อปี"}
+    call("/knowledge/ask", body=public_question, expected=401)
+    call("/knowledge/documents", token=manager, expected=404)
+    grounded = call("/knowledge/ask", token=staff, body=public_question)
+    assert grounded["grounded"] and "10 วัน" in grounded["answer"]
+    assert any(
+        citation["source"] == "seed/leave-policy.md" and citation["snippet"]
+        for citation in grounded["citations"]
+    )
+    restricted = call(
+        "/knowledge/ask",
+        token=manager,
+        body={"question": "งบปรับเงินเดือนประจำปีกี่เปอร์เซ็นต์"},
+    )
+    assert not restricted["grounded"] and not restricted["citations"]
+    assert "4%" not in restricted["answer"]
+
     def propose(message):
         result = call("/agent/runs", token=staff, body={"message": message})
         approvals = result["approvals"]
@@ -88,7 +105,8 @@ def run(base_url: str, staff_password: str, manager_password: str) -> None:
     assert rejected["status"] == "rejected"
     assert inventory(fresh, manager) == {"silom": 3, "bangna": 50}
     print(
-        "Staging passed: authentication, approval, stock write, duplicate protection, audit and repeatable runs."
+        "Staging passed: Knowledge citations and access, approval, stock write, "
+        "duplicate protection, audit and repeatable runs."
     )
 
 

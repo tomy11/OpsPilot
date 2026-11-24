@@ -1,5 +1,6 @@
 import {
   Activity,
+  BookOpen,
   ClipboardCheck,
   LogOut,
   Sparkles,
@@ -13,6 +14,7 @@ import { cn } from "cn";
 
 const pages = [
   { id: "agent", title: "Agent", icon: Sparkles },
+  { id: "knowledge", title: "Knowledge", icon: BookOpen },
   { id: "approvals", title: "Approvals", icon: ClipboardCheck },
   { id: "activity", title: "Activity", icon: Activity },
 ];

@@ -5,45 +5,108 @@ import { Workspace } from "@/components/workspace";
 import { ActivityPage } from "@/features/activity";
 import { AgentPage } from "@/features/agent";
 import { ApprovalsPage } from "@/features/approvals";
+import { InvitePage } from "@/features/invite";
+import { KnowledgePage } from "@/features/knowledge";
 import { Login } from "@/features/login";
 import { request } from "@/lib/api";
 
 const tokenKey = "opspilot-token";
 
+// Read once, then drop it from the address bar and history.
+function takeInvite() {
+  const match = /^#invite=([\w-]+)$/.exec(window.location.hash);
+  if (!match) return null;
+  window.history.replaceState(null, "", window.location.pathname);
+  return match[1];
+}
+
+const firstInvite = takeInvite();
+
+async function refreshToken(signal) {
+  const { access_token: token } = await request("/session/refresh", {
+    method: "POST",
+    signal,
+  });
+  return token;
+}
+
 export function App() {
-  const [savedToken] = useState(() => sessionStorage.getItem(tokenKey));
+  const [invite, setInvite] = useState(firstInvite);
   const [session, setSession] = useState(null);
-  const [restoring, setRestoring] = useState(Boolean(savedToken));
+  const [restoring, setRestoring] = useState(!firstInvite);
+
+  useEffect(() => {
+    function onHashChange() {
+      const token = takeInvite();
+      if (token) setInvite(token);
+    }
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
+  const open = useCallback(async (token, signal) => {
+    const user = await request("/session/me", { token, signal });
+    sessionStorage.setItem(tokenKey, token);
+    setSession({ token, user });
+  }, []);
 
   const logout = useCallback(() => {
     sessionStorage.removeItem(tokenKey);
     setSession(null);
+    // Ends the invite session too, if this browser has one.
+    request("/session/logout", { method: "POST" }).catch(() => {});
   }, []);
 
   useEffect(() => {
-    if (!savedToken) return;
+    if (firstInvite) return;
     const controller = new AbortController();
-    request("/session/me", { token: savedToken, signal: controller.signal })
-      .then((user) => setSession({ token: savedToken, user }))
-      .catch(() => {
-        if (!controller.signal.aborted) logout();
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setRestoring(false);
-      });
+    const { signal } = controller;
+    async function restore() {
+      const saved = sessionStorage.getItem(tokenKey);
+      try {
+        if (!saved) throw new Error("no saved token");
+        await open(saved, signal);
+      } catch {
+        if (signal.aborted) return;
+        sessionStorage.removeItem(tokenKey);
+        try {
+          await open(await refreshToken(signal), signal);
+        } catch {
+          // Not signed in: the login page shows.
+        }
+      } finally {
+        if (!signal.aborted) setRestoring(false);
+      }
+    }
+    restore();
     return () => controller.abort();
-  }, [savedToken, logout]);
+  }, [open]);
 
   async function login(body) {
     const { access_token: token } = await request("/session/login", {
       method: "POST",
       body,
     });
-    const user = await request("/session/me", { token });
-    sessionStorage.setItem(tokenKey, token);
-    setSession({ token, user });
+    await open(token);
   }
 
+  async function acceptInvite() {
+    const { access_token: token } = await request("/session/redeem", {
+      method: "POST",
+      body: { token: invite },
+    });
+    await open(token);
+    setInvite(null);
+  }
+
+  if (invite)
+    return (
+      <InvitePage
+        key={invite}
+        onAccept={acceptInvite}
+        onCancel={() => setInvite(null)}
+      />
+    );
   if (restoring)
     return (
       <main className="grid min-h-dvh place-items-center">
@@ -51,7 +114,7 @@ export function App() {
       </main>
     );
   if (!session) return <Login onLogin={login} />;
-  return <SignedIn key={session.token} {...session} logout={logout} />;
+  return <SignedIn key={session.user.id} {...session} logout={logout} />;
 }
 
 function SignedIn({ token, user, logout }) {
@@ -63,17 +126,38 @@ function SignedIn({ token, user, logout }) {
   const [approval, setApproval] = useState(null);
   const [auditTarget, setAuditTarget] = useState(null);
 
+  const tokenRef = useRef(token);
+  const refreshing = useRef(null);
+  const [credits, setCredits] = useState(user.credits);
+
   const api = useCallback(
     async (path, options) => {
+      const used = tokenRef.current;
       try {
-        return await request(path, { ...options, token });
+        return await request(path, { ...options, token: used });
       } catch (error) {
-        if (error.status === 401 && sessionStorage.getItem(tokenKey) === token)
+        if (error.status !== 401) throw error;
+        if (!user.invited) {
           logout();
+          throw error;
+        }
+      }
+      // Invited users get short tokens; renew from the session cookie and retry once.
+      try {
+        if (tokenRef.current === used) {
+          refreshing.current ??= refreshToken().finally(() => {
+            refreshing.current = null;
+          });
+          tokenRef.current = await refreshing.current;
+          sessionStorage.setItem(tokenKey, tokenRef.current);
+        }
+      } catch (error) {
+        if (error.status === 401) logout();
         throw error;
       }
+      return request(path, { ...options, token: tokenRef.current });
     },
-    [token, logout],
+    [user.invited, logout],
   );
 
   function runAgent() {
@@ -90,7 +174,9 @@ function SignedIn({ token, user, logout }) {
     const turn = turns.find((item) => item.id === id);
     if (busy || !turn?.error) return;
     setTurns((current) =>
-      current.map((item) => (item.id === id ? { id, prompt: item.prompt } : item)),
+      current.map((item) =>
+        item.id === id ? { id, prompt: item.prompt } : item,
+      ),
     );
     send(id, turn.prompt);
   }
@@ -109,6 +195,7 @@ function SignedIn({ token, user, logout }) {
         method: "POST",
         body: { message: prompt },
       });
+      if (run.credits) setCredits(run.credits.balance);
       setTurns((current) =>
         current.map((turn) => (turn.id === id ? { ...turn, run } : turn)),
       );
@@ -145,6 +232,7 @@ function SignedIn({ token, user, logout }) {
           onRetry={retryTurn}
           onEdit={editTurn}
           busy={busy}
+          credits={credits}
           turns={turns}
           openApproval={(id) => {
             setApproval(id);
@@ -152,6 +240,7 @@ function SignedIn({ token, user, logout }) {
           }}
         />
       )}
+      {page === "knowledge" && <KnowledgePage api={api} />}
       {page === "approvals" && (
         <ApprovalsPage
           api={api}

@@ -3,6 +3,7 @@ import {
   ChevronDown,
   ClipboardCheck,
   Pencil,
+  Coins,
   Plus,
   RotateCcw,
   Send,
@@ -43,6 +44,7 @@ export function AgentPage({
   onRetry,
   onEdit,
   busy,
+  credits,
   turns,
   openApproval,
 }) {
@@ -96,6 +98,15 @@ export function AgentPage({
         <h1 id="agent-title" className="text-base font-semibold tracking-tight">
           Agent
         </h1>
+        <div className="flex items-center gap-3">
+          {credits !== null && credits !== undefined && (
+            <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <Coins className="size-4" aria-hidden="true" /> เครดิต{" "}
+              <span className="font-semibold tabular-nums text-foreground">
+                {credits.toLocaleString("th-TH")}
+              </span>
+            </span>
+          )}
         <Button
           type="button"
           variant="outline"
@@ -108,6 +119,7 @@ export function AgentPage({
         >
           <Plus aria-hidden="true" /> แชตใหม่
         </Button>
+        </div>
       </header>
 
       <div
@@ -285,6 +297,11 @@ function AgentReply({ run, openApproval }) {
       <p className="whitespace-pre-wrap [overflow-wrap:anywhere] leading-relaxed">
         {run.answer}
       </p>
+      {run.credits && (
+        <p className="text-xs text-muted-foreground">
+          ใช้ {run.credits.charged.toLocaleString("th-TH")} เครดิต
+        </p>
+      )}
       {run.approvals.map((row) => (
         <div
           key={row.id}

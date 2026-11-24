@@ -12,6 +12,7 @@ from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 from pydantic import ValidationError
 
+from opspilot_agent.credits import CreditExhausted
 from opspilot_agent.erp_client import ErpError
 from opspilot_agent.policy import Decision, authorize_tool
 from opspilot_agent.tools import TOOLS, ToolContext, anthropic_tool_schemas
@@ -75,12 +76,19 @@ def build_agent_graph(deps: AgentDeps):
                 system=SYSTEM_PROMPT, messages=state["messages"], tools=schemas
             )
         except LLMError as exc:
+            exhausted = isinstance(exc, CreditExhausted)
+            answer = (
+                "หยุดก่อนทำครบทุกขั้น เพราะถึงเพดานเครดิตของข้อความนี้"
+                if exhausted
+                else "ระบบ AI ไม่พร้อมใช้งานชั่วคราว กรุณาลองใหม่"
+            )
             return {
                 "pending_calls": [],
                 "iterations": iterations,
-                "answer": "ระบบ AI ไม่พร้อมใช้งานชั่วคราว กรุณาลองใหม่",
-                "stopped_reason": f"llm_error: {exc}",
-                "steps": state.get("steps", []) + [{"type": "llm_error", "error": str(exc)}],
+                "answer": answer,
+                "stopped_reason": "credit_limit" if exhausted else f"llm_error: {exc}",
+                "steps": state.get("steps", [])
+                + [{"type": "llm_error", "error": str(exc), "usage": exc.usage}],
             }
         messages = state["messages"]
         if turn.content:

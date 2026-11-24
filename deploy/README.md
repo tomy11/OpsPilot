@@ -46,8 +46,14 @@ stage up -d --no-build --wait
 At the website, sign in as Staff, run the sample, and open its approval. In a separate browser
 session, sign in as Manager, open the request, and approve it. The transfer should move 7 units
 from Bangna to Silom. The approval detail should show 43 and 10 on hand and the Activity tab
-should show the request, approval and execution. Run the smoke test from outside the VM after
-injecting the two demo passwords into the test shell environment.
+should show the request, approval and execution.
+
+Open **Knowledge** as Staff and ask `ลาพักร้อนได้กี่วันต่อปี`. The answer links to the leave
+policy excerpt. As the Ops Manager, ask `งบปรับเงินเดือนประจำปีกี่เปอร์เซ็นต์` and verify the
+restricted HR document is absent from the answer and citations. The gateway forwards
+`POST /knowledge/ask` to Knowledge, where the signed user identity controls document access.
+
+Run the smoke test from outside the VM with both demo passwords in the shell environment.
 
 ```bash
 python3 scripts/staging-smoke.py https://ops-demo.example.org
@@ -56,6 +62,41 @@ python3 scripts/staging-smoke.py https://ops-demo.example.org
 For a loopback-only rehearsal, use `STAGING_SITE=http://localhost`, `STAGING_BIND=127.0.0.1`,
 `STAGING_HTTP_PORT=18080`, and `STAGING_HTTPS_PORT=18443`. The smoke URL is then
 `http://localhost:18080`. Use a separate Compose project when rehearsing beside a deployment.
+
+## Invite-only chat on Ollama Cloud
+
+Add these to `.env.staging`. Only the Agent container receives the key; Knowledge and DocFlow
+keep their own `LLM_PROVIDER`. In prod the Agent refuses to start with `ollama` unless credits
+are on, and the shared demo accounts then cannot chat, so run the smoke test with the fake model.
+
+```dotenv
+AGENT_LLM_PROVIDER=ollama
+OLLAMA_API_KEY=<key from ollama.com/settings/keys>
+OLLAMA_MODEL=glm-5.2
+CREDITS_ENABLED=true
+CREDIT_MONTHLY_BUDGET_USD=20
+```
+
+Accounts are managed from the host only. Credits are 0.001 USD of model usage each.
+
+```bash
+accounts() { stage exec agent python -m opspilot_agent.accounts_cli "$@"; }
+accounts invite --label "Nok" --credits 500 --base-url https://ops-demo.example.org
+accounts list
+accounts grant invite-<id> --credits 200
+accounts link invite-<id> --base-url https://ops-demo.example.org   # new device
+accounts disable invite-<id>
+```
+
+The link works once, expires in 7 days (`--days`) and is stored only as a hash. Send it
+privately: whoever opens it first gets the account. The browser then holds a 30-day session
+cookie and renews a 15-minute access token from it. Disabling blocks new messages at once;
+other read-only pages stop within 15 minutes.
+
+Each message reserves up to 150 credits, is charged for the tokens the model reported, and gets
+the rest back. A run stops before a call its reservation cannot cover. Calls that fail without
+reporting usage are not charged to the user, so also watch usage in the Ollama account.
+Changing the model means changing `CREDIT_PRICE_INPUT_USD` and `CREDIT_PRICE_OUTPUT_USD`.
 
 ## Operations
 

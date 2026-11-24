@@ -7,9 +7,16 @@
 		Cache-Control "no-store"
 	}
 
-	@workspace path / /assets/* /session/login /session/me /agent/runs /approvals /approvals/* /audit /ready
+	@workspace path / /assets/* /session/login /session/me /session/redeem /session/refresh /session/logout /agent/runs /approvals /approvals/* /audit /ready
 	handle @workspace {
 		reverse_proxy agent:8000
+	}
+	@knowledgeAsk {
+		method POST
+		path /knowledge/ask
+	}
+	handle @knowledgeAsk {
+		reverse_proxy knowledge:8200
 	}
 	handle {
 		respond 404

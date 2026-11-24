@@ -30,12 +30,18 @@ class ApprovalOut(BaseModel):
     updated_at: datetime
 
 
+class RunCredits(BaseModel):
+    charged: float
+    balance: float
+
+
 class AgentRunOut(BaseModel):
     run_id: str
     answer: str
     approvals: list[ApprovalOut]
     steps: list[dict[str, Any]]
     stopped_reason: str | None = None
+    credits: RunCredits | None = None  # set when credits are enabled
 
 
 class DecisionIn(BaseModel):

@@ -4,7 +4,17 @@ import enum
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Enum,
+    ForeignKey,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from opspilot_core.db import Base, new_id, utcnow
@@ -68,3 +78,72 @@ class RunSandbox(Base):
     __tablename__ = "run_sandboxes"
 
     run_id: Mapped[str] = mapped_column(ForeignKey("agent_runs.id"), primary_key=True)
+
+
+# ---- invite-only chat: accounts, invites, sessions, credits -------------------------------------
+# Secrets (invite and session tokens) are stored only as SHA-256 hashes.
+
+
+class ChatAccount(Base):
+    __tablename__ = "chat_accounts"
+    __table_args__ = (CheckConstraint("balance_micro >= 0", name="chat_balance_not_negative"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    label: Mapped[str] = mapped_column(String(128))
+    department: Mapped[str] = mapped_column(String(64), default="ops")
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    balance_micro: Mapped[int] = mapped_column(BigInteger, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ChatInvite(Base):
+    __tablename__ = "chat_invites"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    account_id: Mapped[str] = mapped_column(ForeignKey("chat_accounts.id"), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ChatSession(Base):
+    __tablename__ = "chat_sessions"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    account_id: Mapped[str] = mapped_column(ForeignKey("chat_accounts.id"), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class CreditReservation(Base):
+    __tablename__ = "credit_reservations"
+
+    # One open reservation per account: a second concurrent run hits the primary key.
+    account_id: Mapped[str] = mapped_column(ForeignKey("chat_accounts.id"), primary_key=True)
+    id: Mapped[str] = mapped_column(String(32), unique=True)
+    run_id: Mapped[str] = mapped_column(String(32))
+    month: Mapped[str] = mapped_column(String(7))
+    amount_micro: Mapped[int] = mapped_column(BigInteger)
+    spent_micro: Mapped[int] = mapped_column(BigInteger, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class CreditLedger(Base):
+    """Append-only. The sum of an account's rows always equals its balance."""
+
+    __tablename__ = "credit_ledger"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    account_id: Mapped[str] = mapped_column(ForeignKey("chat_accounts.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(16))  # grant | reserve | settle
+    amount_micro: Mapped[int] = mapped_column(BigInteger)
+    run_id: Mapped[str | None] = mapped_column(String(32))
+    detail: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, index=True
+    )
+
+
+class CreditMonth(Base):
+    __tablename__ = "credit_months"
+
+    month: Mapped[str] = mapped_column(String(7), primary_key=True)  # YYYY-MM, Bangkok time
+    committed_micro: Mapped[int] = mapped_column(BigInteger, default=0)

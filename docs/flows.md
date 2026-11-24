@@ -133,6 +133,39 @@ sequenceDiagram
   Note over API,DB: ไม่ได้เรียก Temporal ตรงนี้ outbox จะ start workflow ให้เอง
 ```
 
+## แชตสำหรับผู้ได้รับเชิญและเครดิต
+
+ใช้เมื่อ `CREDITS_ENABLED=true` บัญชี demo ที่ใช้ร่วมกันจะส่งข้อความไม่ได้ในโหมดนี้
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor O as ผู้ดูแล
+  actor U as ผู้ได้รับเชิญ
+  participant API as Agent API
+  participant DB as Postgres
+  participant LLM as Ollama Cloud (GLM)
+  O->>DB: accounts_cli invite สร้างบัญชี เครดิต และ hash ของลิงก์
+  O-->>U: ส่งลิงก์ #invite=... แบบส่วนตัว
+  U->>API: กดเริ่มใช้งาน POST /session/redeem
+  API->>DB: ใช้ลิงก์ได้ครั้งเดียว (conditional UPDATE)
+  API-->>U: cookie 30 วัน (HttpOnly) และ JWT 15 นาที
+  U->>API: POST /agent/runs
+  API->>DB: จองเครดิต ตรวจบัญชี ยอด จำนวนต่อวัน และงบเดือน
+  alt ไม่ผ่าน
+    API-->>U: 402 / 403 / 409 / 429 / 503 โดยไม่เรียกโมเดล
+  else ผ่าน
+    loop แต่ละรอบของ Agent
+      API->>API: กรณีแพงสุดของรอบนี้เกินยอดจอง ให้หยุด
+      API->>LLM: POST /v1/messages
+      LLM-->>API: คำตอบและ usage
+      API->>DB: บันทึกยอดที่ใช้แล้ว
+    end
+    API->>DB: คิดตาม token จริง คืนส่วนที่เหลือ บันทึก ledger
+    API-->>U: คำตอบ เครดิตที่ใช้ และยอดคงเหลือ
+  end
+```
+
 ## Tools node: จุดที่โค้ดคุมโมเดล
 
 *flowchart · การตัดสินใจต่อ 1 tool call*
