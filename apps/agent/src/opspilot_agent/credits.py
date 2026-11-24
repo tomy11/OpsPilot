@@ -128,6 +128,9 @@ class CreditService:
             account = await s.get(ChatAccount, account_id)
             if account is None or not account.active:
                 raise CreditDenied(403, "บัญชีนี้ไม่ได้รับอนุญาตให้ใช้แชต")
+            if await s.get(CreditReservation, account_id) is not None:
+                # Asked before the balance, which is low only because it is on hold.
+                raise CreditDenied(409, "ข้อความก่อนหน้ายังประมวลผลไม่เสร็จ")
             if await self._runs_today(s, account_id) >= self.s.credit_daily_runs:
                 raise CreditDenied(429, "ใช้ครบจำนวนข้อความของวันนี้แล้ว")
             amount = min(account.balance_micro, self.s.credit_max_per_run * MICRO_PER_CREDIT)

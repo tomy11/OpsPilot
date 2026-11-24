@@ -6,7 +6,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class CoreSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        extra="ignore",
+        env_ignore_empty=True,  # Compose passes unset variables as empty strings
+    )
 
     app_env: Literal["dev", "test", "prod"] = "dev"
     # Every service verifies the same HS256 tokens; replace with an OIDC issuer + JWKS in prod.

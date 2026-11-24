@@ -364,6 +364,27 @@ async def test_two_settlements_racing_on_one_reservation_refund_once(chat):
     assert await chat.check_books(account_id) == 500_000
 
 
+async def test_a_held_balance_is_reported_as_busy_not_as_out_of_credit(chat):
+    account_id, _ = await chat.invite(credits=30)  # less than the per-run cap: all of it is held
+    hold = await chat.credits.reserve(account_id, "r1", 1)
+    assert hold.amount == 30_000
+    with pytest.raises(CreditDenied) as busy:
+        await chat.credits.reserve(account_id, "r2", 1)
+    assert busy.value.status == 409
+    await chat.credits.settle(hold)
+    await chat.check_books(account_id)
+
+
+async def test_wrong_passwords_do_not_block_invites_from_the_same_address(chat):
+    _, link = await chat.invite()
+    async with chat.browser("10.1.1.1") as api:
+        for _ in range(6):
+            await api.post("/session/login", json={"username": "staff", "password": "nope"})
+        r = await api.post("/session/login", json={"username": "staff", "password": "nope"})
+        assert r.status_code == 429
+        assert (await api.post("/session/redeem", json={"token": link})).status_code == 200
+
+
 async def test_daily_message_limit(chat):
     chat.settings.credit_daily_runs = 2
     async with chat.browser() as api:

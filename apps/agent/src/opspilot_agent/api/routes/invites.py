@@ -29,7 +29,9 @@ async def redeem(
     body: RedeemIn, svc: ServicesDep, s: SessionDep, request: Request, response: Response
 ):
     limiter = request.app.state.login_limiter
-    ip = request.client.host if request.client else "unknown"
+    # Counted apart from password sign-ins: colleagues behind one office address must not lose
+    # their invite because somebody mistyped a password.
+    ip = "redeem:" + (request.client.host if request.client else "unknown")
     if wait := limiter.retry_after(ip):
         raise HTTPException(429, "too many attempts, try again later", {"Retry-After": str(wait)})
     result = await accounts.redeem(s, body.token, svc.settings.invite_session_days)

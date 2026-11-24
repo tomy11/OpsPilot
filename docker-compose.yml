@@ -63,6 +63,7 @@ services:
       VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
       OLLAMA_EMBED_URL: ${OLLAMA_EMBED_URL:-http://host.docker.internal:11434}
       OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-bge-m3}
+      KNOWLEDGE_MIN_VECTOR: ${KNOWLEDGE_MIN_VECTOR:-}
     extra_hosts: ["host.docker.internal:host-gateway"]
     ports: ["8200:8200"]
     depends_on:
@@ -94,6 +95,16 @@ services:
       OLLAMA_EFFORT: ${OLLAMA_EFFORT:-high}
       CREDITS_ENABLED: ${CREDITS_ENABLED:-false}
       CREDIT_MONTHLY_BUDGET_USD: ${CREDIT_MONTHLY_BUDGET_USD:-20}
+      # Empty = the default in opspilot_agent/config.py
+      CREDIT_MAX_PER_RUN: ${CREDIT_MAX_PER_RUN:-}
+      CREDIT_DAILY_RUNS: ${CREDIT_DAILY_RUNS:-}
+      CREDIT_PRICE_INPUT_USD: ${CREDIT_PRICE_INPUT_USD:-}
+      CREDIT_PRICE_OUTPUT_USD: ${CREDIT_PRICE_OUTPUT_USD:-}
+      CREDIT_PRICE_CACHED_USD: ${CREDIT_PRICE_CACHED_USD:-}
+      OLLAMA_MAX_TOKENS: ${OLLAMA_MAX_TOKENS:-}
+      LOGIN_MAX_FAILURES_PER_IP: ${LOGIN_MAX_FAILURES_PER_IP:-}
+      LOGIN_MAX_FAILURES_PER_USER: ${LOGIN_MAX_FAILURES_PER_USER:-}
+      LOGIN_WINDOW_S: ${LOGIN_WINDOW_S:-}
     extra_hosts: ["host.docker.internal:host-gateway"]
     ports: ["8000:8000"]
     depends_on:
