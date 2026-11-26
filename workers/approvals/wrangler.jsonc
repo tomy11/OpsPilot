@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // One Workflow instance per OpsPilot approval. See README.md.
+  "name": "opspilot-approvals",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-26",
+  "observability": { "enabled": true },
+  "workflows": [
+    {
+      "name": "opspilot-approvals",
+      "binding": "APPROVALS",
+      "class_name": "ApprovalWorkflow"
+    }
+  ],
+  "vars": {
+    // Where the Workflow calls the agent back (/internal/approvals/...).
+    "AGENT_URL": "http://localhost:18090"
+  }
+  // Secrets (wrangler secret put, or .dev.vars locally):
+  //   WORKER_SECRET    the agent calls this Worker with it   (APPROVALS_WORKER_SECRET)
+  //   CALLBACK_SECRET  this Worker calls the agent with it   (APPROVALS_CALLBACK_SECRET)
+}

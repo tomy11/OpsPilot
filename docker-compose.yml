@@ -10,8 +10,12 @@ x-agent-env: &agent-env
   <<: *core-env
   ERP_BASE_URL: http://erp-mock:8100
   KNOWLEDGE_BASE_URL: http://knowledge:8200
-  APPROVAL_BACKEND: temporal
+  APPROVAL_BACKEND: ${APPROVAL_BACKEND:-temporal}  # or cloudflare (workers/approvals)
   TEMPORAL_HOST: temporal:7233
+  APPROVAL_TIMEOUT_HOURS: ${APPROVAL_TIMEOUT_HOURS:-24}
+  APPROVALS_WORKER_URL: ${APPROVALS_WORKER_URL:-http://host.docker.internal:8787}
+  APPROVALS_WORKER_SECRET: ${APPROVALS_WORKER_SECRET:-}
+  APPROVALS_CALLBACK_SECRET: ${APPROVALS_CALLBACK_SECRET:-}
 
 services:
   postgres:

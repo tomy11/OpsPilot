@@ -19,7 +19,7 @@ class LoginIn(BaseModel):
 
 
 class SessionOut(User):
-    approval_backend: Literal["temporal", "inline"]
+    approval_backend: Literal["temporal", "cloudflare", "inline"]
     invited: bool = False
     label: str | None = None
     credits: float | None = None  # None = not limited by credits

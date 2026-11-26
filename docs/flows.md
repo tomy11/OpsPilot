@@ -292,6 +292,44 @@ sequenceDiagram
 
 > กรณีอนุมัติแล้วแต่ signal ส่งไม่ถึงจนครบ 24 ชั่วโมง workflow จะอ่านการตัดสินใจจากฐานข้อมูลตอนหมดเวลา แล้วลงมือทำต่อ การตัดสินใจที่ commit แล้วจึงไม่หาย
 
+### ทางเลือก: Cloudflare Workflows (`APPROVAL_BACKEND=cloudflare`)
+
+outbox และ `run_delivery` ทำงานเหมือนเดิม ต่างกันที่ปลายทางเป็น Worker ใน `workers/approvals` แทน Temporal และขั้นที่แตะ Postgres หรือ ERP เปลี่ยนจาก activity ใน worker เป็นการเรียกกลับมาที่ agent
+
+*sequence · Workflow บน Cloudflare เรียกกลับมาที่ agent*
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant D as run_delivery
+  participant CW as Worker (WORKER_SECRET)
+  participant WF as ApprovalWorkflow (Cloudflare)
+  participant API as /internal/approvals (CALLBACK_SECRET)
+  participant E as ERP mock
+  D->>CW: POST /approvals {approval_id}
+  CW->>WF: create approval-{id} (ซ้ำ = instance.already_exists → 200)
+  D->>CW: POST /approvals/{id}/decision
+  alt instance ยังรอได้
+    CW->>WF: sendEvent decision (มาก่อนถึง waitForEvent ก็ถูกเก็บไว้)
+  else ไม่มี instance หรือจบไปแล้ว
+    CW-->>D: 404 / 409 → WorkflowGone → approved จะเป็น failed
+  end
+  WF->>API: step execute (1s×2 สูงสุด 1 นาที, ลองใหม่ 10 ครั้ง)
+  API->>E: POST /stock-transfers + Idempotency-Key
+  alt ERP ล่มหรือ error ชั่วคราว
+    API-->>WF: 503 → ลองใหม่
+  else ERP ปฏิเสธถาวร
+    API-->>WF: 422 → NonRetryableError → step mark failed
+  else สำเร็จ
+    API-->>WF: 200 executed
+  end
+  opt ไม่มี decision ภายใน 24 ชม.
+    WF->>API: step expire → อ่านสถานะจริงเหมือน Temporal
+  end
+```
+
+> ทุก endpoint ใน `/internal/approvals` เรียกซ้ำได้ผลเดิม เพราะ step ของ Workflow อาจรันมากกว่าหนึ่งครั้ง และจะตอบ 404 ถ้า backend ไม่ใช่ `cloudflare` วิธีรันดูที่ `workers/approvals/README.md`
+
 ---
 
 # OpsPilot Knowledge · `:8200`

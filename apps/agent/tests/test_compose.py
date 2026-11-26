@@ -13,7 +13,8 @@ NAMES = {line.split("=")[0] for line in EXAMPLE.splitlines() if line[:1].isupper
 
 
 @pytest.mark.parametrize(
-    "name", sorted(n for n in NAMES if n.startswith(("CREDIT", "OLLAMA", "AGENT_LLM", "CHAT")))
+    "name",
+    sorted(n for n in NAMES if n.startswith(("CREDIT", "OLLAMA", "AGENT_LLM", "CHAT", "APPROVAL"))),
 )
 def test_chat_settings_in_env_example_reach_the_containers(name):
     assert f"${{{name}:-" in COMPOSE

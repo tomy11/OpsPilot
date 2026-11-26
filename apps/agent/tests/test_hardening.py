@@ -10,6 +10,7 @@ from temporalio.service import RPCError, RPCStatusCode
 from opspilot_agent.api.delivery import deliver_due, retry_delay, start_pending
 from opspilot_agent.api.login_limit import LoginLimiter
 from opspilot_agent.api.main import create_app
+from opspilot_agent.api.orchestrator import TemporalOrchestrator
 from opspilot_agent.fake_llm import FakeLLM
 from opspilot_agent.models import (
     AgentRun,
@@ -20,24 +21,37 @@ from opspilot_agent.models import (
 from opspilot_core.db import AuditLog, Database, utcnow
 
 
-class Orchestrator:
-    """Answers start/decide with a scripted RPC error (or success when None)."""
+class ScriptedClient:
+    """A Temporal client whose start/signal fail with a scripted RPC error (or succeed)."""
 
-    def __init__(self, error: RPCStatusCode | None = None) -> None:
-        self.error, self.started, self.signals = error, [], []
+    def __init__(self, error: RPCStatusCode | None, owner: "Orchestrator") -> None:
+        self.error, self.owner = error, owner
 
     def _raise(self) -> None:
         if self.error is not None:
             raise RPCError("scripted", self.error, b"")
 
-    async def start(self, approval_id):
+    async def start_workflow(self, *args, id, **kwargs):
         self._raise()
-        self.started.append(approval_id)
-        return f"approval-{approval_id}"
+        self.owner.started.append(id.removeprefix("approval-"))
 
-    async def decide(self, approval_id, signal):
-        self.signals.append((approval_id, signal.approve))
-        self._raise()
+    def get_workflow_handle(self, workflow_id):
+        client = self
+
+        class Handle:
+            async def signal(self, signal_def, signal):
+                client.owner.signals.append((workflow_id.removeprefix("approval-"), signal.approve))
+                client._raise()
+
+        return Handle()
+
+
+class Orchestrator(TemporalOrchestrator):
+    """The real Temporal orchestrator over a scripted client, so its error mapping is tested."""
+
+    def __init__(self, error: RPCStatusCode | None = None) -> None:
+        super().__init__(ScriptedClient(error, self), "q", 24)
+        self.started, self.signals = [], []
 
 
 @pytest.fixture

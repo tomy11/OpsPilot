@@ -10,12 +10,15 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { formatTime } from "@/lib/api";
 
+// Temporal or Cloudflare: decisions wait until the approval's workflow has started.
+const durable = (user) => user.approval_backend !== "inline";
+
 function watchApproval(user, row) {
   return (
     row.status === "approved" ||
     (row.status === "pending" &&
       (user.role === "staff" ||
-        (user.approval_backend === "temporal" && !row.workflow_id)))
+        (durable(user) && !row.workflow_id)))
   );
 }
 
@@ -177,8 +180,7 @@ function ApprovalDetail({
   openActivity,
   error,
 }) {
-  const awaitingWorkflow =
-    user.approval_backend === "temporal" && !row.workflow_id;
+  const awaitingWorkflow = durable(user) && !row.workflow_id;
   const canDecide =
     row.status === "pending" &&
     !awaitingWorkflow &&

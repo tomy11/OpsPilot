@@ -1,0 +1,2 @@
+WORKER_SECRET=change-me-agent-to-worker
+CALLBACK_SECRET=change-me-worker-to-agent

@@ -14,10 +14,11 @@ from opspilot_agent.api.deps import Services
 from opspilot_agent.api.login_limit import LoginLimiter
 from opspilot_agent.api.orchestrator import (
     ApprovalOrchestrator,
+    CloudflareOrchestrator,
     InlineOrchestrator,
     TemporalOrchestrator,
 )
-from opspilot_agent.api.routes import agent, approvals, demo, invites
+from opspilot_agent.api.routes import agent, approvals, demo, internal, invites
 from opspilot_agent.config import AgentSettings, get_settings
 from opspilot_agent.credits import CreditService, pricing_for
 from opspilot_agent.erp_client import ErpClient
@@ -54,6 +55,21 @@ def check_chat_settings(s: AgentSettings) -> None:
         pricing_for(s)  # refuse to start rather than charge a wrong price
 
 
+def check_approval_settings(s: AgentSettings) -> None:
+    if s.approval_backend != "cloudflare":
+        return
+    secrets = [
+        s.approvals_worker_secret.get_secret_value(),
+        s.approvals_callback_secret.get_secret_value(),
+    ]
+    if not all(secrets):
+        raise ValueError("APPROVALS_WORKER_SECRET and APPROVALS_CALLBACK_SECRET are required")
+    if s.app_env == "prod" and (
+        min(len(x.encode()) for x in secrets) < 32 or secrets[0] == secrets[1]
+    ):
+        raise ValueError("use two different approvals secrets of at least 32 bytes")
+
+
 def create_app(
     settings: AgentSettings | None = None,
     *,
@@ -77,6 +93,7 @@ def create_app(
             if any(passwords) and (min(map(len, passwords)) < 16 or passwords[0] == passwords[1]):
                 raise ValueError("configure distinct demo passwords of at least 16 characters")
         check_chat_settings(s)
+        check_approval_settings(s)
         db = Database(s.database_url)
         await db.create_all()
         erp = ErpClient(s.erp_base_url, timeout_s=s.erp_timeout_s, transport=erp_transport)
@@ -96,6 +113,12 @@ def create_app(
 
                 client = await Client.connect(s.temporal_host)
                 orch = TemporalOrchestrator(client, s.temporal_task_queue, s.approval_timeout_hours)
+            elif s.approval_backend == "cloudflare":
+                orch = CloudflareOrchestrator(
+                    s.approvals_worker_url,
+                    s.approvals_worker_secret.get_secret_value(),
+                    s.approval_timeout_hours,
+                )
             else:
                 orch = InlineOrchestrator(db, tools)
 
@@ -117,7 +140,7 @@ def create_app(
         )
         delivery = (
             asyncio.create_task(run_delivery(db, orch, timeout_hours=s.approval_timeout_hours))
-            if s.approval_backend == "temporal"
+            if s.durable_approvals
             else None
         )
         try:
@@ -127,6 +150,8 @@ def create_app(
                 delivery.cancel()
                 with suppress(asyncio.CancelledError):
                     await delivery
+            if isinstance(orch, CloudflareOrchestrator) and orchestrator is None:
+                await orch.aclose()
             await erp.aclose()
             await kb.aclose()
             await db.dispose()
@@ -142,6 +167,7 @@ def create_app(
     app.include_router(approvals.router)
     app.include_router(demo.router)
     app.include_router(invites.router)
+    app.include_router(internal.router)
     if (WEB_DIST / "index.html").is_file():
         app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")
     return app

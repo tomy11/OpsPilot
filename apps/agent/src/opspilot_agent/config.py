@@ -41,16 +41,26 @@ class AgentSettings(CoreSettings):
     knowledge_base_url: str = "http://localhost:8200"
     knowledge_timeout_s: float = 10.0
 
-    approval_backend: Literal["temporal", "inline"] = "temporal"
+    approval_backend: Literal["temporal", "cloudflare", "inline"] = "temporal"
     temporal_host: str = "localhost:7233"
     temporal_task_queue: str = "opspilot-approvals"
     approval_timeout_hours: int = 24
+    # Cloudflare Workflows (apps/approvals-workflow). One secret each way: the agent calls the
+    # Worker with the first, the Workflow calls /internal/approvals back with the second.
+    approvals_worker_url: str = "http://localhost:8787"
+    approvals_worker_secret: SecretStr = SecretStr("")
+    approvals_callback_secret: SecretStr = SecretStr("")
 
     agent_max_steps: int = 8
     # How much of a conversation the model is shown. More memory costs more credits per message.
     chat_history_turns: int = 8
     chat_history_bytes: int = 12_000
     chat_history_requests: int = 20
+
+    @property
+    def durable_approvals(self) -> bool:
+        """Decisions go through the outbox to a workflow instead of running in the request."""
+        return self.approval_backend in ("temporal", "cloudflare")
 
     @property
     def provider(self) -> str:

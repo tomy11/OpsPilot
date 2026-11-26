@@ -3,10 +3,10 @@ from datetime import timedelta
 
 import httpx
 import pytest
-from temporalio.service import RPCError, RPCStatusCode
 
 from opspilot_agent.api.delivery import deliver_due
 from opspilot_agent.api.main import WEB_DIST, create_app
+from opspilot_agent.api.orchestrator import OrchestratorUnavailable
 from opspilot_agent.fake_llm import FakeLLM
 from opspilot_agent.models import ApprovalDelivery, ApprovalRequest
 from opspilot_core.db import utcnow
@@ -23,7 +23,7 @@ class IntermittentOrchestrator:
         self.attempts += 1
         assert signal.approve and signal.approver_id == "demo-manager"
         if self.attempts == 1:
-            raise RPCError("temporarily unavailable", RPCStatusCode.UNAVAILABLE, b"")
+            raise OrchestratorUnavailable("temporarily unavailable")
 
 
 async def test_staging_auth_and_decision_is_persisted_before_retry(settings, erp_transport):

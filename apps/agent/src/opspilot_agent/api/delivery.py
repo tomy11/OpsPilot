@@ -1,14 +1,14 @@
-"""Transactional outbox for the Temporal backend.
+"""Transactional outbox for the durable backends (Temporal, Cloudflare Workflows).
 
 The API only writes to Postgres. This loop then (1) starts a workflow for each pending approval
-that has none yet and (2) delivers committed decisions as signals, retrying until Temporal
+that has none yet and (2) delivers committed decisions to it, retrying until the backend
 answers. Rows are claimed with `FOR UPDATE SKIP LOCKED`, so several API replicas can run it.
 
 Retries are bounded by meaning, not by a counter, so no schema change is needed:
 - transient errors back off with the age of the decision (5 s up to 5 min);
 - a pending approval whose workflow could not start within the approval timeout expires,
   exactly as it would have inside the workflow;
-- an approved decision whose workflow no longer exists (NOT_FOUND) can never execute, so the
+- an approved decision whose workflow no longer exists (WorkflowGone) can never execute, so the
   approval is marked failed and audited instead of being retried forever.
 """
 
@@ -18,9 +18,12 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from temporalio.service import RPCError, RPCStatusCode
 
-from opspilot_agent.api.orchestrator import ApprovalOrchestrator
+from opspilot_agent.api.orchestrator import (
+    ApprovalOrchestrator,
+    OrchestratorUnavailable,
+    WorkflowGone,
+)
 from opspilot_agent.approvals import ApprovalConflict, transition
 from opspilot_agent.models import ApprovalDelivery, ApprovalRequest, ApprovalStatus
 from opspilot_agent.worker.workflows import DecisionSignal
@@ -99,7 +102,7 @@ async def start_pending(
             try:
                 async with asyncio.timeout(3):
                     approval.workflow_id = await orchestrator.start(approval.id)
-            except (RPCError, TimeoutError) as exc:
+            except (OrchestratorUnavailable, TimeoutError) as exc:
                 log.warning("Approval %s workflow start will retry: %s", approval.id, exc)
                 ok = False
         await s.commit()
@@ -127,13 +130,12 @@ async def deliver_due(db: Database, orchestrator: ApprovalOrchestrator) -> None:
                             approval.decision_reason,
                         ),
                     )
-            except (RPCError, TimeoutError) as exc:
-                missing = isinstance(exc, RPCError) and exc.status == RPCStatusCode.NOT_FOUND
-                if not missing:
-                    now = utcnow()
-                    delivery.next_attempt = now + retry_delay(approval.updated_at, now)
-                    log.warning("Approval %s signal will retry: %s", approval.id, exc)
-                    continue
+            except (OrchestratorUnavailable, TimeoutError) as exc:
+                now = utcnow()
+                delivery.next_attempt = now + retry_delay(approval.updated_at, now)
+                log.warning("Approval %s signal will retry: %s", approval.id, exc)
+                continue
+            except WorkflowGone:
                 if approval.status is ApprovalStatus.APPROVED:
                     # Approved, but no workflow is left to carry it out: fail loudly, once.
                     await _finish(

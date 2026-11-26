@@ -91,7 +91,7 @@ async def decide(
             raise HTTPException(status.HTTP_403_FORBIDDEN, policy.reason)
 
         if (
-            svc.settings.approval_backend == "temporal"
+            svc.settings.durable_approvals
             and a.status is ApprovalStatus.PENDING
             and not a.workflow_id
         ):
@@ -117,11 +117,11 @@ async def decide(
             target=approval_id,
             detail={"reason": body.reason},
         )
-        if svc.settings.approval_backend == "temporal":
+        if svc.settings.durable_approvals:
             s.add(ApprovalDelivery(approval_id=approval_id))
         await s.commit()
 
-    if svc.settings.approval_backend == "inline":
+    if not svc.settings.durable_approvals:
         await svc.orchestrator.decide(
             approval_id,
             DecisionSignal(approve=body.approve, approver_id=user.id, reason=body.reason),

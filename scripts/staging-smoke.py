@@ -57,7 +57,7 @@ def run(base_url: str, staff_password: str, manager_password: str) -> None:
     call("/approvals", expected=401)
     staff = login("staff", staff_password)
     manager = login("manager", manager_password)
-    assert call("/session/me", token=staff)["approval_backend"] == "temporal"
+    assert call("/session/me", token=staff)["approval_backend"] in ("temporal", "cloudflare")
 
     public_question = {"question": "ลาพักร้อนได้กี่วันต่อปี"}
     call("/knowledge/ask", body=public_question, expected=401)

@@ -88,7 +88,7 @@ Key design choices:
 | Answers match reality | If an answer touches on requests or approvals but this run created none, the model must call the tool or rewrite it once; a claim that remains gets a system notice. The UI states when a message created no request |
 | Tool input safety | Strict tool schemas + Pydantic validation before any call |
 | Exactly-once writes | Conditional status transitions in DB + ERP `Idempotency-Key` = approval id |
-| Long waits / crashes | Temporal waits up to 24h for a decision. Pending starts and committed decisions are an outbox in Postgres: retried with backoff, expired if no workflow could start in time, failed (and audited) if an approved workflow is gone |
+| Long waits / crashes | Temporal (or Cloudflare Workflows, `APPROVAL_BACKEND=cloudflare`) waits up to 24h for a decision. Pending starts and committed decisions are an outbox in Postgres: retried with backoff, expired if no workflow could start in time, failed (and audited) if an approved workflow is gone |
 | Transient ERP failures | Client-side retry (tenacity) + Temporal activity retry; 4xx are permanent → `failed` |
 | Audit / PDPA | Every tool call, request, decision and execution is in `audit_logs`; PII masked |
 | Offline dev | `LLM_PROVIDER=fake` deterministic planner, `APPROVAL_BACKEND=inline` without Temporal |
@@ -237,7 +237,9 @@ apps/agent/                  opspilot-agent
   src/opspilot_agent/        tools, policy, LangGraph loop, ERP + Knowledge clients, approvals, fake LLM
     api/                     FastAPI app, agent-run and approval routes, orchestrators
     worker/                  Temporal ApprovalWorkflow + activities + worker entrypoint
+    api/routes/internal.py   callbacks for the Cloudflare Workflow (execute / expire / fail)
   tests/                     policy, ERP client, agent API, Temporal workflow, Agent->Knowledge over HTTP
+workers/approvals/           the same ApprovalWorkflow on Cloudflare Workflows (TypeScript, wrangler)
 apps/knowledge/              opspilot-knowledge
   src/opspilot_knowledge/    models + ACL, chunking, tokeniser, embeddings, pgvector, retrieval, grounded answers, API
   seed/                      seed documents with access front-matter
